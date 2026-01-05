@@ -1,0 +1,177 @@
+---
+title: Anthropic
+description: Auto-trace Anthropic Claude API calls
+---
+
+# Anthropic Integration
+
+Automatically trace all Anthropic Claude API calls with zero code changes.
+
+## Supported APIs
+
+| API | Streaming | Tool Use | Token Counting |
+|-----|-----------|----------|----------------|
+| Messages | Yes | Yes | Yes |
+
+## TypeScript
+
+```bash
+npm install rd-mini @anthropic-ai/sdk
+```
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import Anthropic from '@anthropic-ai/sdk';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const anthropic = raindrop.wrap(new Anthropic());
+
+// Non-streaming
+const response = await anthropic.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+console.log(response._traceId); // Access trace ID
+```
+
+### Streaming
+
+```typescript
+const stream = await anthropic.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'Write a haiku' }],
+  stream: true,
+});
+
+console.log(stream._traceId); // Available immediately
+
+for await (const event of stream) {
+  if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+    process.stdout.write(event.delta.text);
+  }
+}
+// Trace completes automatically when stream ends
+```
+
+### Tool Use
+
+```typescript
+const response = await anthropic.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'What is the weather in Tokyo?' }],
+  tools: [
+    {
+      name: 'get_weather',
+      description: 'Get the current weather',
+      input_schema: {
+        type: 'object',
+        properties: {
+          location: { type: 'string', description: 'City name' },
+        },
+        required: ['location'],
+      },
+    },
+  ],
+});
+
+// Tool use is automatically captured in the trace
+const toolUse = response.content.find(block => block.type === 'tool_use');
+```
+
+### Per-Request Options
+
+```typescript
+const response = await anthropic.messages.create(
+  {
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: 'Hello!' }],
+  },
+  {
+    raindrop: {
+      userId: 'user_123',
+      conversationId: 'conv_456',
+      properties: { experiment: 'claude-test' },
+    },
+  }
+);
+```
+
+## Python
+
+```bash
+pip install rd-mini anthropic
+```
+
+```python
+from raindrop import Raindrop
+from anthropic import Anthropic
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+anthropic = raindrop.wrap(Anthropic())
+
+# Non-streaming
+response = anthropic.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+
+print(response._trace_id)  # Access trace ID
+```
+
+### Streaming
+
+```python
+with anthropic.messages.stream(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Write a haiku"}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="")
+# Trace completes automatically
+```
+
+### Per-Request Options
+
+```python
+response = anthropic.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}],
+    raindrop={
+        "user_id": "user_123",
+        "conversation_id": "conv_456",
+    },
+)
+```
+
+## What's Captured
+
+Every Anthropic call automatically captures:
+
+- **Model** - Which Claude model was used
+- **Input** - Messages sent to Claude
+- **Output** - Claude's response (text and tool use)
+- **Tokens** - Input and output token counts
+- **Latency** - Time from request to response
+- **Tool Use** - Tool names and inputs
+- **Errors** - Any errors that occurred
+
+## System Prompts
+
+System prompts are captured as part of the input:
+
+```typescript
+const response = await anthropic.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  system: 'You are a helpful assistant.',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+```

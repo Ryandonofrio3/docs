@@ -45,6 +45,14 @@
               "sdk/browser/installation",
               "sdk/browser/usage"
             ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/openai",
+              "integrations/anthropic",
+              "integrations/vercel-ai-sdk"
+            ]
           }
         ]
       },

@@ -1,0 +1,206 @@
+---
+title: Vercel AI SDK
+description: Auto-trace Vercel AI SDK calls
+---
+
+# Vercel AI SDK Integration
+
+Automatically trace all Vercel AI SDK model calls. Works with any provider supported by the AI SDK.
+
+<Note>
+  Currently available for TypeScript only.
+</Note>
+
+## Supported Features
+
+| Feature | Streaming | Tool Calls | Token Counting |
+|---------|-----------|------------|----------------|
+| generateText | N/A | Yes | Yes |
+| streamText | Yes | Yes | Yes |
+| generateObject | N/A | N/A | Yes |
+| streamObject | Yes | N/A | Yes |
+
+## Installation
+
+```bash
+npm install rd-mini ai @ai-sdk/openai
+```
+
+## Basic Usage
+
+Wrap the model, not the client:
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import { openai } from '@ai-sdk/openai';
+import { generateText, streamText } from 'ai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+
+// Wrap the model
+const model = raindrop.wrap(openai('gpt-4o'));
+
+// Use with generateText
+const { text } = await generateText({
+  model,
+  prompt: 'Write a haiku about coding',
+});
+```
+
+## generateText
+
+```typescript
+import { generateText } from 'ai';
+
+const model = raindrop.wrap(openai('gpt-4o'));
+
+const result = await generateText({
+  model,
+  prompt: 'Explain quantum computing',
+});
+
+console.log(result.text);
+// Trace is automatically sent
+```
+
+## streamText
+
+```typescript
+import { streamText } from 'ai';
+
+const model = raindrop.wrap(openai('gpt-4o'));
+
+const result = await streamText({
+  model,
+  prompt: 'Write a story',
+});
+
+for await (const chunk of result.textStream) {
+  process.stdout.write(chunk);
+}
+// Trace completes when stream ends
+```
+
+## generateObject
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+
+const model = raindrop.wrap(openai('gpt-4o'));
+
+const { object } = await generateObject({
+  model,
+  schema: z.object({
+    recipe: z.object({
+      name: z.string(),
+      ingredients: z.array(z.string()),
+      steps: z.array(z.string()),
+    }),
+  }),
+  prompt: 'Generate a recipe for chocolate chip cookies',
+});
+```
+
+## Tool Calls
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const model = raindrop.wrap(openai('gpt-4o'));
+
+const result = await generateText({
+  model,
+  tools: {
+    weather: tool({
+      description: 'Get the weather',
+      parameters: z.object({
+        location: z.string(),
+      }),
+      execute: async ({ location }) => {
+        return { temperature: 72, condition: 'sunny' };
+      },
+    }),
+  },
+  prompt: 'What is the weather in San Francisco?',
+});
+
+// Tool calls are automatically traced
+```
+
+## With User Context
+
+Pass raindrop options when wrapping the model:
+
+```typescript
+const model = raindrop.wrap(openai('gpt-4o'), {
+  userId: 'user_123',
+  conversationId: 'conv_456',
+  properties: { feature: 'chat' },
+});
+
+const { text } = await generateText({
+  model,
+  prompt: 'Hello!',
+});
+```
+
+## Multiple Providers
+
+Works with any AI SDK provider:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { google } from '@ai-sdk/google';
+
+// OpenAI
+const gpt4 = raindrop.wrap(openai('gpt-4o'));
+
+// Anthropic
+const claude = raindrop.wrap(anthropic('claude-3-5-sonnet-20241022'));
+
+// Google
+const gemini = raindrop.wrap(google('gemini-1.5-pro'));
+
+// All calls are automatically traced
+```
+
+## Within Interactions
+
+Wrapped models work seamlessly with `withInteraction`:
+
+```typescript
+const model = raindrop.wrap(openai('gpt-4o'));
+
+const answer = await raindrop.withInteraction(
+  { event: 'rag_query', input: query },
+  async () => {
+    // Search docs (if wrapped with wrapTool)
+    const docs = await searchDocs(query);
+
+    // Generate with AI SDK
+    const { text } = await generateText({
+      model,
+      system: `Context: ${docs.join('\n')}`,
+      prompt: query,
+    });
+
+    return text;
+  }
+);
+// Both the tool call and AI call are linked in one trace
+```
+
+## What's Captured
+
+Every AI SDK call automatically captures:
+
+- **Model** - Provider and model ID (e.g., `openai:gpt-4o`)
+- **Input** - Prompt or messages
+- **Output** - Generated text or object
+- **Tokens** - Prompt and completion tokens
+- **Latency** - Time from request to response
+- **Tool Calls** - Tool names, inputs, and results
+- **Errors** - Any errors that occurred
