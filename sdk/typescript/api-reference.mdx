@@ -1,0 +1,204 @@
+---
+title: API Reference
+description: TypeScript SDK API reference
+---
+
+# API Reference
+
+Complete reference for the rd-mini TypeScript SDK.
+
+## Raindrop
+
+### Constructor
+
+```typescript
+new Raindrop(config: RaindropConfig)
+```
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `apiKey` | `string` | Yes | Your Raindrop API key |
+| `baseUrl` | `string` | No | API base URL (default: `https://api.raindrop.ai`) |
+| `debug` | `boolean` | No | Enable debug logging |
+| `disabled` | `boolean` | No | Disable all tracking |
+
+### Methods
+
+#### `wrap(client)`
+
+Wrap an AI client for automatic tracing.
+
+```typescript
+const openai = raindrop.wrap(new OpenAI());
+```
+
+Returns the same client type with tracing enabled.
+
+---
+
+#### `identify(userId, traits?)`
+
+Set the current user for all subsequent calls.
+
+```typescript
+raindrop.identify('user_123', {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  plan: 'pro',
+});
+```
+
+---
+
+#### `feedback(traceId, options)`
+
+Send feedback for a specific trace.
+
+```typescript
+await raindrop.feedback(traceId, {
+  type: 'thumbs_up',
+  comment: 'Great answer!',
+});
+```
+
+---
+
+#### `withInteraction(options, fn)`
+
+Execute a function within an interaction context.
+
+```typescript
+await raindrop.withInteraction(
+  { event: 'rag_query', userId: 'user_123' },
+  async (ctx) => {
+    // All traced calls are auto-linked
+    ctx.output = 'Final result';
+  }
+);
+```
+
+---
+
+#### `begin(options)`
+
+Start a new interaction with manual control.
+
+```typescript
+const interaction = raindrop.begin({
+  event: 'chat',
+  userId: 'user_123',
+  input: 'Hello',
+});
+```
+
+Returns an `Interaction` object.
+
+---
+
+#### `resumeInteraction(eventId)`
+
+Resume an existing interaction by ID.
+
+```typescript
+const interaction = raindrop.resumeInteraction('evt_123');
+```
+
+---
+
+#### `wrapTool(name, fn)`
+
+Wrap a function as a traced tool.
+
+```typescript
+const searchDocs = raindrop.wrapTool('search_docs', async (query) => {
+  return await vectorDB.search(query);
+});
+```
+
+---
+
+#### `getLastTraceId()`
+
+Get the most recent trace ID.
+
+```typescript
+const traceId = raindrop.getLastTraceId();
+```
+
+---
+
+#### `close()`
+
+Flush all pending events and close the transport.
+
+```typescript
+await raindrop.close();
+```
+
+---
+
+## Interaction
+
+Returned by `begin()` and `resumeInteraction()`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | The interaction/event ID |
+| `output` | `string \| undefined` | Get/set the output |
+
+### Methods
+
+#### `setProperty(key, value)`
+
+Set a single property.
+
+```typescript
+interaction.setProperty('stage', 'completed');
+```
+
+---
+
+#### `setProperties(props)`
+
+Set multiple properties.
+
+```typescript
+interaction.setProperties({ tokens: 150, cached: true });
+```
+
+---
+
+#### `addAttachments(attachments)`
+
+Add attachments to the interaction.
+
+```typescript
+interaction.addAttachments([
+  { type: 'text', name: 'context', value: '...', role: 'input' }
+]);
+```
+
+---
+
+#### `setInput(input)`
+
+Set the input text.
+
+```typescript
+interaction.setInput('User query');
+```
+
+---
+
+#### `finish(options?)`
+
+Finish and send the interaction.
+
+```typescript
+interaction.finish({
+  output: 'Final response',
+  properties: { ... },
+});
+```

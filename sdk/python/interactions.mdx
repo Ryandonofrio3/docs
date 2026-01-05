@@ -1,0 +1,93 @@
+---
+title: Interactions
+description: Group multi-step AI pipelines
+---
+
+# Interactions
+
+For complex pipelines (RAG, agents, multi-step workflows), group multiple AI calls into a single interaction.
+
+## Context Manager
+
+Use `with raindrop.interaction()` for straightforward multi-step flows:
+
+```python
+with raindrop.interaction(
+    user_id="user_123",
+    event="rag_query",
+    input="What is the capital of France?"
+) as ctx:
+    # All wrapped clients auto-link to this interaction
+    docs = search_docs(query)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"Docs: {docs}\n\nQ: {query}"}]
+    )
+
+    # Set the final output
+    ctx.output = response.choices[0].message.content
+```
+
+## Begin/Finish (Flexible)
+
+When you need more control (webhooks, streaming, cross-function):
+
+```python
+# Start the interaction
+interaction = raindrop.begin(
+    event_id="evt_123",           # Optional custom ID
+    event="chat_message",
+    user_id="user_123",
+    input="What is love?",
+    model="gpt-4o",
+)
+
+print(interaction.id)  # Access the event ID
+
+# Do your work...
+response = client.chat.completions.create(...)
+
+# Update properties as you go
+interaction.set_property("stage", "completed")
+interaction.set_properties({"tokens": 150, "cached": True})
+
+# Finish when done
+interaction.output = response.choices[0].message.content
+interaction.finish()
+```
+
+## Resume an Interaction
+
+Continue an interaction from elsewhere:
+
+```python
+# In your initial handler
+interaction = raindrop.begin(event="async_job", user_id="user_123")
+save_to_database(event_id=interaction.id, ...)
+
+# Later, in a webhook or different function
+interaction = raindrop.resume_interaction("evt_123")
+interaction.output = "Final result from webhook"
+interaction.finish()
+```
+
+## Tool Tracing
+
+Trace custom tool calls within interactions:
+
+```python
+@raindrop.tool("search_docs")
+def search_docs(query: str) -> list:
+    return vector_db.search(query)
+
+# Use within an interaction - auto-linked as a span
+with raindrop.interaction(event="rag_query") as ctx:
+    docs = search_docs("capital of France")
+    # search_docs call appears as a span in the interaction
+```
+
+Or use `wrap_tool`:
+
+```python
+search_docs = raindrop.wrap_tool("search_docs", lambda q: vector_db.search(q))
+```

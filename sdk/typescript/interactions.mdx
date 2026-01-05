@@ -1,0 +1,112 @@
+---
+title: Interactions
+description: Group multi-step AI pipelines
+---
+
+# Interactions
+
+For complex pipelines (RAG, agents, multi-step workflows), group multiple AI calls into a single interaction.
+
+## Context Manager (Simple)
+
+Use `withInteraction` for straightforward multi-step flows:
+
+```typescript
+const result = await raindrop.withInteraction(
+  {
+    userId: 'user_123',
+    event: 'rag_query',
+    input: 'What is the capital of France?',
+    conversationId: 'conv_123',
+  },
+  async (ctx) => {
+    // All wrapped clients auto-link to this interaction
+    const docs = await searchDocs(query);
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: `Docs: ${docs}\n\nQ: ${query}` }],
+    });
+
+    // Set the final output
+    ctx.output = response.choices[0].message.content;
+    return response;
+  }
+);
+```
+
+## Begin/Finish (Flexible)
+
+When you need more control (webhooks, streaming, cross-function):
+
+```typescript
+// Start the interaction
+const interaction = raindrop.begin({
+  eventId: 'evt_123',           // Optional custom ID
+  event: 'chat_message',
+  userId: 'user_123',
+  input: 'What is love?',
+  model: 'gpt-4o',
+  conversationId: 'conv_123',
+});
+
+console.log(interaction.id);  // Access the event ID
+
+// Do your work...
+const response = await openai.chat.completions.create({ ... });
+
+// Update properties as you go
+interaction.setProperty('stage', 'completed');
+interaction.setProperties({ tokens: 150, cached: true });
+
+// Finish when done
+interaction.output = response.choices[0].message.content;
+interaction.finish();
+```
+
+## Resume an Interaction
+
+Continue an interaction from elsewhere (webhook handlers, different functions):
+
+```typescript
+// In your initial handler
+const interaction = raindrop.begin({ event: 'async_job', userId: 'user_123' });
+await saveToDatabase({ eventId: interaction.id, ... });
+
+// Later, in a webhook or different function
+const interaction = raindrop.resumeInteraction('evt_123');
+interaction.output = 'Final result from webhook';
+interaction.finish();
+```
+
+## Tool Tracing
+
+Trace custom tool calls within interactions:
+
+```typescript
+// Define a traced tool
+const searchDocs = raindrop.wrapTool(
+  'search_docs',
+  async (query: string) => {
+    return await vectorDB.search(query);
+  }
+);
+
+// Use within an interaction - auto-linked as a span
+await raindrop.withInteraction({ event: 'rag' }, async () => {
+  const docs = await searchDocs('capital of France');
+  // searchDocs call appears as a span in the interaction
+});
+```
+
+## Attachments
+
+Include additional context with your interactions:
+
+```typescript
+interaction.addAttachments([
+  { type: 'code', name: 'example.ts', value: 'console.log("hi")', role: 'input', language: 'typescript' },
+  { type: 'text', name: 'context', value: 'Retrieved document...', role: 'input' },
+  { type: 'image', value: 'https://example.com/img.png', role: 'output' },
+  { type: 'iframe', name: 'Generated UI', value: 'https://app.example.com', role: 'output' },
+]);
+```

@@ -1,0 +1,83 @@
+---
+title: Feedback
+description: Connect user ratings to AI traces
+---
+
+# Feedback
+
+Connect thumbs up/down and other user feedback to specific AI responses.
+
+## Basic Usage
+
+```typescript
+// After getting a response
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+// User clicks thumbs up
+await raindrop.feedback(response._traceId, {
+  type: 'thumbs_up',
+  comment: 'Great answer!',
+});
+
+// Or thumbs down
+await raindrop.feedback(response._traceId, {
+  type: 'thumbs_down',
+  comment: 'Not helpful',
+});
+```
+
+## Numeric Scores
+
+Use a 0-1 score instead of categorical feedback:
+
+```typescript
+await raindrop.feedback(response._traceId, {
+  score: 0.8,
+  comment: 'Mostly correct',
+});
+```
+
+## Feedback Options
+
+```typescript
+await raindrop.feedback(traceId, {
+  // Pick one:
+  type: 'thumbs_up',           // or 'thumbs_down'
+  score: 0.8,                  // 0-1, overrides type
+
+  // Optional:
+  comment: 'User feedback',
+  signalType: 'feedback',      // 'default' | 'feedback' | 'edit' | 'standard'
+  attachmentId: 'att_123',     // Link to specific attachment
+  properties: { ... },         // Custom data
+});
+```
+
+## Signal Types
+
+| Type | Use Case |
+|------|----------|
+| `default` | General feedback |
+| `feedback` | Explicit user feedback with comment |
+| `edit` | User edited the AI response |
+| `standard` | Standard quality signal |
+
+## Getting the Trace ID
+
+The trace ID is available on every response:
+
+```typescript
+// Non-streaming
+const response = await openai.chat.completions.create({ ... });
+console.log(response._traceId);
+
+// Streaming - available immediately
+const stream = await openai.chat.completions.create({ ..., stream: true });
+console.log(stream._traceId);
+
+// Fallback
+const traceId = raindrop.getLastTraceId();
+```

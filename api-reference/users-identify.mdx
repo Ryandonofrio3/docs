@@ -1,0 +1,63 @@
+---
+title: POST /users/identify
+description: Identify users with traits
+---
+
+# POST /users/identify
+
+Identify users and associate traits with them.
+
+## Request
+
+```bash
+curl https://api.raindrop.ai/v1/users/identify \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "user_123",
+    "traits": {
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "plan": "pro",
+      "company": "Acme Inc"
+    }
+  }'
+```
+
+## Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `user_id` | `string` | Yes | Unique user identifier |
+| `traits` | `object` | No | User traits/properties |
+
+### Common Traits
+
+| Trait | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | User's display name |
+| `email` | `string` | Email address |
+| `plan` | `string` | Subscription plan (e.g., "free", "pro") |
+| `company` | `string` | Company name |
+
+You can include any custom traits relevant to your application.
+
+## Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Example: Batch Identify
+
+```bash
+curl https://api.raindrop.ai/v1/users/identify \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    { "user_id": "user_1", "traits": { "plan": "free" } },
+    { "user_id": "user_2", "traits": { "plan": "pro" } }
+  ]'
+```

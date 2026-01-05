@@ -1,0 +1,90 @@
+---
+title: Wrap
+description: Auto-trace AI calls with wrap()
+---
+
+# Wrap
+
+The `wrap()` method is the core of rd-mini. Wrap your AI client once, and every call is automatically traced.
+
+## OpenAI
+
+```python
+import os
+from rd_mini import Raindrop
+from openai import OpenAI
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+client = raindrop.wrap(OpenAI())
+
+# Non-streaming
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.choices[0].message.content)
+print(response._trace_id)  # Trace ID for feedback
+```
+
+## Anthropic
+
+```python
+import os
+from rd_mini import Raindrop
+from anthropic import Anthropic
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+client = raindrop.wrap(Anthropic())
+
+response = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+
+print(response.content[0].text)
+print(response._trace_id)
+```
+
+## Streaming
+
+Streaming works automatically. The trace captures the full output when the stream completes.
+
+```python
+stream = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Count to 10"}],
+    stream=True
+)
+
+# Trace ID available immediately
+print("Trace:", stream._trace_id)
+
+for chunk in stream:
+    content = chunk.choices[0].delta.content
+    if content:
+        print(content, end="")
+# Trace automatically completes with full output
+```
+
+## User Identification
+
+Associate calls with users:
+
+```python
+# Global - applies to all subsequent calls
+raindrop.identify("user_123", {
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "plan": "pro",
+})
+```
+
+## Cleanup
+
+Flush pending events before your process exits:
+
+```python
+raindrop.close()
+```

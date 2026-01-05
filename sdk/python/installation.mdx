@@ -1,0 +1,64 @@
+---
+title: Installation
+description: Install the Python SDK
+---
+
+# Installation
+
+Install rd-mini with pip or uv:
+
+<Tabs>
+  <Tab title="pip">
+    ```bash
+    pip install rd-mini
+    ```
+  </Tab>
+  <Tab title="uv">
+    ```bash
+    uv add rd-mini
+    ```
+  </Tab>
+  <Tab title="poetry">
+    ```bash
+    poetry add rd-mini
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Setup
+
+```python
+import os
+from rd_mini import Raindrop
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+```
+
+## Configuration Options
+
+```python
+raindrop = Raindrop(
+    # Required
+    api_key=os.environ["RAINDROP_API_KEY"],
+
+    # Optional
+    base_url="https://api.raindrop.ai",  # Custom API endpoint
+    debug=True,                           # Log all events to console
+    disabled=os.environ.get("ENV") == "test",  # Disable in tests
+)
+```
+
+## Supported Providers
+
+rd-mini supports wrapping these AI clients:
+
+| Provider | Import | Wrap |
+|----------|--------|------|
+| OpenAI | `from openai import OpenAI` | `raindrop.wrap(OpenAI())` |
+| Anthropic | `from anthropic import Anthropic` | `raindrop.wrap(Anthropic())` |
+
+## Next Steps
+
+<Card title="Wrap your client" icon="arrow-right" href="/sdk/python/wrap">
+  Learn how to wrap AI clients for automatic tracing
+</Card>

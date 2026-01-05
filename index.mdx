@@ -1,97 +1,74 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: rd-mini
+description: Zero-config AI observability. Two lines to get started.
 ---
 
-## Setting up
+# rd-mini
 
-Get your documentation site up and running in minutes.
+Zero-config AI observability SDK. Wrap your AI client once, trace everything automatically.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="TypeScript" icon="js" href="/sdk/typescript/installation">
+    For Node.js, Bun, and serverless
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Python" icon="python" href="/sdk/python/installation">
+    For Python applications
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Browser" icon="browser" href="/sdk/browser/installation">
+    For client-side tracking
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="HTTP API" icon="code" href="/api-reference/introduction">
+    Direct API access
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## The Problem
 
-Everything you need to create world-class documentation.
+Traditional AI observability requires 30+ lines of OpenTelemetry setup:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+```typescript
+// instrumentation.ts - complex OTEL setup
+import { registerOTel } from '@vercel/otel';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+// ... more imports and configuration
 
-## Need inspiration?
+// Then at EVERY call site:
+const result = await generateText({
+  model: openai('gpt-4o'),
+  prompt: message,
+  experimental_telemetry: {
+    isEnabled: true,  // Easy to forget!
+    functionId: 'chat',
+    metadata: { ... },
+  },
+});
+```
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+Miss one `experimental_telemetry`? No trace.
+
+## The Solution
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const openai = raindrop.wrap(new OpenAI());
+
+// That's it. Every call is now traced.
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+console.log(response._traceId); // Access trace ID for feedback
+```
+
+## Features
+
+- **Zero config** - No OTEL setup, no instrumentation files
+- **Wrap once** - All calls automatically traced
+- **Works with streaming** - Full output captured when stream completes
+- **Multi-provider** - OpenAI, Anthropic, Vercel AI SDK
+- **Feedback** - Connect user ratings to specific traces
+- **Interactions** - Group multi-step pipelines (RAG, agents)

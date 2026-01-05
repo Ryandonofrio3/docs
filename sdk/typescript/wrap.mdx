@@ -1,0 +1,113 @@
+---
+title: Wrap
+description: Auto-trace AI calls with wrap()
+---
+
+# Wrap
+
+The `wrap()` method is the core of rd-mini. Wrap your AI client once, and every call is automatically traced.
+
+## OpenAI
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const openai = raindrop.wrap(new OpenAI());
+
+// Non-streaming
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+console.log(response.choices[0].message.content);
+console.log(response._traceId); // Trace ID for feedback
+```
+
+## Anthropic
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import Anthropic from '@anthropic-ai/sdk';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const anthropic = raindrop.wrap(new Anthropic());
+
+const response = await anthropic.messages.create({
+  model: 'claude-3-5-sonnet-20241022',
+  max_tokens: 1024,
+  messages: [{ role: 'user', content: 'Hello!' }],
+});
+
+console.log(response.content[0].text);
+console.log(response._traceId);
+```
+
+## Streaming
+
+Streaming works automatically. The trace captures the full output when the stream completes.
+
+```typescript
+const stream = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Count to 10' }],
+  stream: true,
+});
+
+// Trace ID available immediately
+console.log('Trace:', stream._traceId);
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content || '');
+}
+// Trace automatically completes with full output
+```
+
+## User Identification
+
+Associate calls with users:
+
+```typescript
+// Global - applies to all subsequent calls
+raindrop.identify('user_123', {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  plan: 'pro',
+});
+
+// Per-request override
+const response = await openai.chat.completions.create(
+  { model: 'gpt-4o', messages: [...] },
+  { raindrop: { userId: 'different_user' } }
+);
+```
+
+## Conversation Threading
+
+Group multi-turn conversations:
+
+```typescript
+const conversationId = 'conv_' + Date.now();
+
+// Turn 1
+const response1 = await openai.chat.completions.create(
+  { model: 'gpt-4o', messages: [{ role: 'user', content: 'Hi!' }] },
+  { raindrop: { conversationId } }
+);
+
+// Turn 2 - same conversation
+const response2 = await openai.chat.completions.create(
+  { model: 'gpt-4o', messages: [...] },
+  { raindrop: { conversationId } }
+);
+```
+
+## Cleanup
+
+Flush pending events before your process exits:
+
+```typescript
+await raindrop.close();
+```

@@ -1,0 +1,161 @@
+---
+title: Usage
+description: Track AI events from the browser
+---
+
+# Usage
+
+The Browser SDK provides methods to track AI events, send feedback, and identify users from client-side code.
+
+## Track AI Events
+
+### Single-shot Events
+
+Track a complete AI interaction:
+
+```typescript
+const { eventIds } = await raindrop.trackAi({
+  event: 'chat',
+  userId: 'user_123',
+  model: 'gpt-4o',
+  input: 'What is the weather?',
+  output: 'It is sunny and warm.',
+  convoId: 'conv_123',
+  properties: {
+    page: '/chat',
+    session: 'abc123',
+  },
+});
+
+console.log('Event ID:', eventIds[0]);
+```
+
+### Partial Events (Streaming)
+
+For streaming responses, use partial events:
+
+```typescript
+const eventId = crypto.randomUUID();
+
+// Start the partial event
+const partial = await raindrop.trackAiPartial({
+  eventId,
+  event: 'chat',
+  userId: 'user_123',
+  model: 'gpt-4o',
+  input: 'Tell me a story',
+});
+
+// Update as chunks arrive
+await raindrop.trackAiPartial({ eventId, output: 'Once upon ' });
+await raindrop.trackAiPartial({ eventId, output: 'a time...' });
+
+// Finish with final output
+await partial.finish({ output: 'Once upon a time... The end.' });
+```
+
+## Send Feedback
+
+### Thumbs Up/Down
+
+```typescript
+await raindrop.feedback(eventId, {
+  type: 'thumbs_up',
+  comment: 'Great response!',
+});
+
+await raindrop.feedback(eventId, {
+  type: 'thumbs_down',
+  comment: 'Not helpful',
+});
+```
+
+### Numeric Score
+
+```typescript
+await raindrop.feedback(eventId, {
+  score: 0.8,  // 0-1
+  comment: 'Mostly accurate',
+});
+```
+
+## Track Signals
+
+For more control over feedback, use `trackSignal`:
+
+```typescript
+// Thumbs down with comment
+await raindrop.trackSignal({
+  eventId,
+  name: 'thumbs_down',
+  type: 'feedback',
+  sentiment: 'NEGATIVE',
+  comment: 'Answer was off-topic',
+});
+
+// Edit signal - user corrected the response
+await raindrop.trackSignal({
+  eventId,
+  name: 'edit',
+  type: 'edit',
+  after: 'The corrected response text',
+});
+```
+
+## Identify Users
+
+Associate events with users:
+
+```typescript
+// Single user
+await raindrop.identify({
+  userId: 'user_123',
+  traits: {
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    plan: 'pro',
+  },
+});
+
+// Batch identify
+await raindrop.identify([
+  { userId: 'user_1', traits: { plan: 'free' } },
+  { userId: 'user_2', traits: { plan: 'pro' } },
+]);
+```
+
+## API Reference
+
+### `trackAi(options)`
+
+Track a single-shot AI event.
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `event` | `string` | Yes | Event name |
+| `userId` | `string` | No | User ID |
+| `eventId` | `string` | No | Custom event ID |
+| `model` | `string` | No | Model name |
+| `input` | `string` | No | Input text |
+| `output` | `string` | No | Output text |
+| `convoId` | `string` | No | Conversation ID |
+| `properties` | `object` | No | Additional properties |
+| `attachments` | `array` | No | Attachments |
+
+### `trackAiPartial(options)`
+
+Start or update a partial AI event.
+
+Returns a `PartialEvent` with a `finish()` method.
+
+### `feedback(traceId, options)`
+
+Send feedback for a trace.
+
+### `trackSignal(options)`
+
+Track a signal on an event.
+
+### `identify(options)`
+
+Identify a user or batch of users.

@@ -1,0 +1,71 @@
+---
+title: Installation
+description: Install the TypeScript SDK
+---
+
+# Installation
+
+Install rd-mini with your preferred package manager:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install rd-mini
+    ```
+  </Tab>
+  <Tab title="bun">
+    ```bash
+    bun add rd-mini
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add rd-mini
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add rd-mini
+    ```
+  </Tab>
+</Tabs>
+
+## Basic Setup
+
+```typescript
+import { Raindrop } from 'rd-mini';
+
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+});
+```
+
+## Configuration Options
+
+```typescript
+const raindrop = new Raindrop({
+  // Required
+  apiKey: process.env.RAINDROP_API_KEY,
+
+  // Optional
+  baseUrl: 'https://api.raindrop.ai',  // Custom API endpoint
+  debug: true,                          // Log all events to console
+  disabled: process.env.NODE_ENV === 'test',  // Disable in tests
+});
+```
+
+## Supported Providers
+
+rd-mini supports wrapping these AI clients:
+
+| Provider | Import | Wrap |
+|----------|--------|------|
+| OpenAI | `import OpenAI from 'openai'` | `raindrop.wrap(new OpenAI())` |
+| Anthropic | `import Anthropic from '@anthropic-ai/sdk'` | `raindrop.wrap(new Anthropic())` |
+| Vercel AI SDK | `import { openai } from '@ai-sdk/openai'` | `raindrop.wrap(openai('gpt-4o'))` |
+
+## Next Steps
+
+<Card title="Wrap your client" icon="arrow-right" href="/sdk/typescript/wrap">
+  Learn how to wrap AI clients for automatic tracing
+</Card>

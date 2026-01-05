@@ -1,0 +1,195 @@
+---
+title: API Reference
+description: Python SDK API reference
+---
+
+# API Reference
+
+Complete reference for the rd-mini Python SDK.
+
+## Raindrop
+
+### Constructor
+
+```python
+Raindrop(
+    api_key: str,
+    base_url: str = "https://api.raindrop.ai",
+    debug: bool = False,
+    disabled: bool = False,
+)
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `api_key` | `str` | Yes | Your Raindrop API key |
+| `base_url` | `str` | No | API base URL |
+| `debug` | `bool` | No | Enable debug logging |
+| `disabled` | `bool` | No | Disable all tracking |
+
+### Methods
+
+#### `wrap(client)`
+
+Wrap an AI client for automatic tracing.
+
+```python
+client = raindrop.wrap(OpenAI())
+```
+
+---
+
+#### `identify(user_id, traits=None)`
+
+Set the current user for all subsequent calls.
+
+```python
+raindrop.identify("user_123", {
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+})
+```
+
+---
+
+#### `feedback(trace_id, options)`
+
+Send feedback for a specific trace.
+
+```python
+raindrop.feedback(trace_id, {
+    "type": "thumbs_up",
+    "comment": "Great answer!",
+})
+```
+
+---
+
+#### `interaction(user_id=None, event="interaction", ...)`
+
+Context manager for multi-step interactions.
+
+```python
+with raindrop.interaction(event="rag_query") as ctx:
+    # All traced calls are auto-linked
+    ctx.output = "Final result"
+```
+
+---
+
+#### `begin(options)`
+
+Start a new interaction with manual control.
+
+```python
+interaction = raindrop.begin(
+    event="chat",
+    user_id="user_123",
+    input="Hello",
+)
+```
+
+---
+
+#### `resume_interaction(event_id)`
+
+Resume an existing interaction by ID.
+
+```python
+interaction = raindrop.resume_interaction("evt_123")
+```
+
+---
+
+#### `tool(name)`
+
+Decorator to wrap a function as a traced tool.
+
+```python
+@raindrop.tool("search_docs")
+def search_docs(query: str) -> list:
+    return vector_db.search(query)
+```
+
+---
+
+#### `wrap_tool(name, fn)`
+
+Wrap a function as a traced tool (functional style).
+
+```python
+search_docs = raindrop.wrap_tool("search_docs", lambda q: vector_db.search(q))
+```
+
+---
+
+#### `get_last_trace_id()`
+
+Get the most recent trace ID.
+
+```python
+trace_id = raindrop.get_last_trace_id()
+```
+
+---
+
+#### `flush()`
+
+Manually flush pending events.
+
+```python
+raindrop.flush()
+```
+
+---
+
+#### `close()`
+
+Flush all pending events and close the transport.
+
+```python
+raindrop.close()
+```
+
+---
+
+## Interaction
+
+Returned by `begin()` and `resume_interaction()`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `str` | The interaction/event ID |
+| `output` | `str \| None` | Get/set the output |
+
+### Methods
+
+#### `set_property(key, value)`
+
+Set a single property.
+
+---
+
+#### `set_properties(props)`
+
+Set multiple properties.
+
+---
+
+#### `add_attachments(attachments)`
+
+Add attachments to the interaction.
+
+---
+
+#### `set_input(input_text)`
+
+Set the input text.
+
+---
+
+#### `finish(options=None)`
+
+Finish and send the interaction.

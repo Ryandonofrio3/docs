@@ -1,0 +1,96 @@
+---
+title: POST /signals/track
+description: Send feedback and signals
+---
+
+# POST /signals/track
+
+Send feedback, ratings, and other signals for AI events.
+
+## Request
+
+```bash
+curl https://api.raindrop.ai/v1/signals/track \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "event_id": "evt_abc123",
+      "signal_name": "thumbs_up",
+      "sentiment": "POSITIVE",
+      "signal_type": "feedback",
+      "timestamp": "2024-01-15T10:35:00Z",
+      "properties": {
+        "comment": "Great response!"
+      }
+    }
+  ]'
+```
+
+## Request Body
+
+Array of signal objects:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `event_id` | `string` | Yes | ID of the event being rated |
+| `signal_name` | `string` | Yes | Signal name (e.g., "thumbs_up") |
+| `sentiment` | `string` | No | "POSITIVE" or "NEGATIVE" |
+| `signal_type` | `string` | No | "default", "feedback", or "edit" |
+| `timestamp` | `string` | No | ISO 8601 timestamp |
+| `attachment_id` | `string` | No | Link to specific attachment |
+| `properties` | `object` | No | Additional properties |
+
+### Signal Types
+
+| Type | Description |
+|------|-------------|
+| `default` | General signal |
+| `feedback` | User feedback with optional comment |
+| `edit` | User edited the response |
+
+### Common Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `comment` | `string` | User's feedback comment |
+| `after` | `string` | For edit signals: the corrected content |
+| `score` | `number` | Numeric score (0-1) |
+
+## Response
+
+```json
+{
+  "success": true,
+  "received": 1
+}
+```
+
+## Examples
+
+### Thumbs Down
+
+```json
+{
+  "event_id": "evt_abc123",
+  "signal_name": "thumbs_down",
+  "sentiment": "NEGATIVE",
+  "signal_type": "feedback",
+  "properties": {
+    "comment": "Response was inaccurate"
+  }
+}
+```
+
+### Edit Signal
+
+```json
+{
+  "event_id": "evt_abc123",
+  "signal_name": "edit",
+  "signal_type": "edit",
+  "properties": {
+    "after": "The corrected response text"
+  }
+}
+```

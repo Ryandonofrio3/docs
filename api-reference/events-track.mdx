@@ -1,0 +1,91 @@
+---
+title: POST /events/track
+description: Track AI events and interactions
+---
+
+# POST /events/track
+
+Track AI events, including model calls, interactions, and custom events.
+
+## Request
+
+```bash
+curl https://api.raindrop.ai/v1/events/track \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "event_id": "evt_abc123",
+      "user_id": "user_123",
+      "event": "ai_interaction",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "properties": {
+        "provider": "openai",
+        "latency_ms": 1250,
+        "input_tokens": 50,
+        "output_tokens": 100
+      },
+      "ai_data": {
+        "model": "gpt-4o",
+        "input": "What is the capital of France?",
+        "output": "The capital of France is Paris.",
+        "convo_id": "conv_123"
+      }
+    }
+  ]'
+```
+
+## Request Body
+
+Array of event objects:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `event_id` | `string` | Yes | Unique event identifier |
+| `user_id` | `string` | No | User identifier |
+| `event` | `string` | Yes | Event name |
+| `timestamp` | `string` | Yes | ISO 8601 timestamp |
+| `properties` | `object` | No | Custom properties |
+| `ai_data` | `object` | No | AI-specific data |
+| `attachments` | `array` | No | File attachments |
+
+### ai_data Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | `string` | Model name (e.g., "gpt-4o") |
+| `input` | `string` | Input prompt or messages |
+| `output` | `string` | Model output |
+| `convo_id` | `string` | Conversation ID for threading |
+
+### Attachment Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `string` | "code", "text", "image", or "iframe" |
+| `name` | `string` | Optional name |
+| `value` | `string` | Content or URL |
+| `role` | `string` | "input" or "output" |
+| `language` | `string` | For code: programming language |
+
+## Response
+
+```json
+{
+  "success": true,
+  "received": 1
+}
+```
+
+## Example: Batch Events
+
+```bash
+curl https://api.raindrop.ai/v1/events/track \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    { "event_id": "evt_1", "event": "query", ... },
+    { "event_id": "evt_2", "event": "response", ... },
+    { "event_id": "evt_3", "event": "feedback", ... }
+  ]'
+```
