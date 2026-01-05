@@ -51,6 +51,11 @@ const raindrop = new Raindrop({
   baseUrl: 'https://api.raindrop.ai',  // Custom API endpoint
   debug: true,                          // Log all events to console
   disabled: process.env.NODE_ENV === 'test',  // Disable in tests
+
+  // Advanced (tune for production)
+  flushInterval: 1000,   // ms between auto-flushes (default: 1000)
+  maxQueueSize: 100,     // Flush when queue reaches this size (default: 100)
+  maxRetries: 3,         // Retry failed requests (default: 3)
 });
 ```
 

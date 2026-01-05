@@ -17,6 +17,9 @@ Raindrop(
     base_url: str = "https://api.raindrop.ai",
     debug: bool = False,
     disabled: bool = False,
+    flush_interval: float = 1.0,
+    max_queue_size: int = 100,
+    max_retries: int = 3,
 )
 ```
 
@@ -26,6 +29,9 @@ Raindrop(
 | `base_url` | `str` | No | API base URL |
 | `debug` | `bool` | No | Enable debug logging |
 | `disabled` | `bool` | No | Disable all tracking |
+| `flush_interval` | `float` | No | Seconds between auto-flushes (default: 1.0) |
+| `max_queue_size` | `int` | No | Flush at this queue size (default: 100) |
+| `max_retries` | `int` | No | Retry failed requests (default: 3) |
 
 ### Methods
 

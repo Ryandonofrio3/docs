@@ -53,12 +53,13 @@ Get AI observability running in your app in under 2 minutes.
   </Tab>
   <Tab title="Browser">
     ```bash
-    npm install rd-mini-browser
+    npm install rd-mini
     ```
 
     ```typescript
-    import { Raindrop } from 'rd-mini-browser';
+    import { Raindrop } from 'rd-mini/browser';
 
+    // Get your API key at https://raindrop.ai/dashboard
     const raindrop = new Raindrop({ apiKey: 'your-api-key' });
 
     // Track AI events from the client
@@ -94,10 +95,16 @@ Every traced call automatically captures:
 ## Next Steps
 
 <CardGroup cols={2}>
+  <Card title="Common Patterns" icon="code" href="/patterns">
+    RAG, chat, and agent examples
+  </Card>
   <Card title="User Feedback" icon="thumbs-up" href="/sdk/typescript/feedback">
     Connect thumbs up/down to traces
   </Card>
   <Card title="Multi-step Pipelines" icon="sitemap" href="/sdk/typescript/interactions">
     Group RAG and agent workflows
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Common issues and fixes
   </Card>
 </CardGroup>

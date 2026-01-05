@@ -1,0 +1,290 @@
+---
+title: Deployment Patterns
+description: Best practices for different deployment environments
+---
+
+# Deployment Patterns
+
+rd-mini works in all modern deployment environments. This guide covers environment-specific considerations.
+
+## Serverless (AWS Lambda, Vercel Functions)
+
+Serverless functions terminate immediately after returning a response. You must flush events before the function exits.
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const openai = raindrop.wrap(new OpenAI());
+
+export async function handler(event) {
+  const result = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: event.body.prompt }],
+  });
+
+  // Flush before returning - critical for serverless!
+  await raindrop.flush();
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ response: result.choices[0].message.content }),
+  };
+}
+```
+
+<Warning>
+  Without `flush()`, events may be lost when the function terminates.
+</Warning>
+
+## Cloudflare Workers
+
+Workers require special handling for streaming responses and event flushing.
+
+### Basic Usage
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const raindrop = new Raindrop({ apiKey: env.RAINDROP_API_KEY });
+    const openai = raindrop.wrap(new OpenAI({ apiKey: env.OPENAI_API_KEY }));
+
+    const { prompt } = await request.json();
+
+    const result = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    // Use waitUntil to flush after response is sent
+    ctx.waitUntil(raindrop.flush());
+
+    return Response.json({ response: result.choices[0].message.content });
+  },
+};
+```
+
+### Streaming Responses
+
+For streaming, use `waitUntil` to keep the worker alive until events are flushed:
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const raindrop = new Raindrop({ apiKey: env.RAINDROP_API_KEY });
+    const openai = raindrop.wrap(new OpenAI({ apiKey: env.OPENAI_API_KEY }));
+
+    const { prompt } = await request.json();
+
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: prompt }],
+      stream: true,
+    });
+
+    // Create a TransformStream to pass through chunks
+    const { readable, writable } = new TransformStream();
+
+    // Process stream in background, flush when done
+    ctx.waitUntil((async () => {
+      const writer = writable.getWriter();
+      for await (const chunk of stream) {
+        const text = chunk.choices[0]?.delta?.content || '';
+        await writer.write(new TextEncoder().encode(text));
+      }
+      await writer.close();
+      await raindrop.flush();
+    })());
+
+    return new Response(readable, {
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  },
+};
+```
+
+### Using withInteraction in Workers
+
+`withInteraction()` uses `AsyncLocalStorage` which requires the `nodejs_compat` flag:
+
+```toml
+# wrangler.toml
+compatibility_flags = ["nodejs_compat"]
+```
+
+## Next.js
+
+### App Router (Server Components & Route Handlers)
+
+```typescript
+// app/api/chat/route.ts
+import { Raindrop } from 'rd-mini';
+import OpenAI from 'openai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY! });
+const openai = raindrop.wrap(new OpenAI());
+
+export async function POST(request: Request) {
+  const { prompt } = await request.json();
+
+  const result = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return Response.json({
+    response: result.choices[0].message.content,
+    traceId: result._traceId,
+  });
+}
+```
+
+### Streaming with AI SDK
+
+```typescript
+// app/api/chat/route.ts
+import { Raindrop } from 'rd-mini';
+import { openai } from '@ai-sdk/openai';
+import { streamText } from 'ai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY! });
+const model = raindrop.wrap(openai('gpt-4o'));
+
+export async function POST(request: Request) {
+  const { prompt } = await request.json();
+
+  const result = streamText({
+    model,
+    prompt,
+  });
+
+  return result.toDataStreamResponse();
+}
+```
+
+## Long-Running Processes
+
+For servers, background workers, or long-running processes:
+
+### Graceful Shutdown
+
+```typescript
+import { Raindrop } from 'rd-mini';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY! });
+
+// Handle shutdown signals
+process.on('SIGTERM', async () => {
+  console.log('Shutting down...');
+  await raindrop.close(); // Flushes and closes
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('Interrupted...');
+  await raindrop.close();
+  process.exit(0);
+});
+```
+
+### WebSocket / Real-time Connections
+
+For connections that span multiple messages, use the `begin()`/`finish()` pattern:
+
+```typescript
+import { Raindrop } from 'rd-mini';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY! });
+
+wss.on('connection', (ws, req) => {
+  const userId = req.headers['x-user-id'];
+
+  ws.on('message', async (data) => {
+    const { message, conversationId } = JSON.parse(data);
+
+    // Start interaction for this message
+    const interaction = raindrop.begin({
+      userId,
+      event: 'websocket_message',
+      input: message,
+      conversationId,
+    });
+
+    try {
+      const response = await generateResponse(message);
+      interaction.finish({ output: response });
+      ws.send(JSON.stringify({ response }));
+    } catch (error) {
+      interaction.finish({ output: `Error: ${error.message}` });
+      ws.send(JSON.stringify({ error: error.message }));
+    }
+  });
+
+  ws.on('close', () => {
+    raindrop.flush(); // Flush on disconnect
+  });
+});
+```
+
+## Queue Configuration
+
+Tune batching behavior for your environment:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const raindrop = new Raindrop({
+      apiKey: process.env.RAINDROP_API_KEY!,
+      flushInterval: 1000,   // Flush every 1 second (default)
+      maxQueueSize: 100,     // Flush when queue reaches 100 events (default)
+      maxRetries: 3,         // Retry failed requests 3 times (default)
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    raindrop = Raindrop(
+        api_key=os.environ["RAINDROP_API_KEY"],
+        flush_interval=1.0,   # Flush every 1 second (default)
+        max_queue_size=100,   # Flush when queue reaches 100 events (default)
+        max_retries=3,        # Retry failed requests 3 times (default)
+    )
+    ```
+  </Tab>
+</Tabs>
+
+**Recommendations:**
+
+| Environment | flush_interval | max_queue_size |
+|-------------|----------------|----------------|
+| Serverless | N/A (use `flush()`) | N/A |
+| High-throughput API | 500ms | 200 |
+| Background worker | 5000ms | 50 |
+| Development | 100ms | 10 |
+
+## Debugging
+
+Enable debug mode to see all events being sent:
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY!,
+  debug: true, // Logs: [raindrop] Queued event, Sent N events, etc.
+});
+```
+
+## Disable in Tests
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY!,
+  disabled: process.env.NODE_ENV === 'test',
+});
+```

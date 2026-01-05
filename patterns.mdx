@@ -1,0 +1,352 @@
+---
+title: Common Patterns
+description: Real-world examples for RAG, chat, and agent workflows
+---
+
+# Common Patterns
+
+Copy-paste examples for the most common AI application patterns.
+
+## RAG Pipeline
+
+Trace a complete retrieval-augmented generation flow:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Raindrop } from 'rd-mini';
+    import OpenAI from 'openai';
+
+    const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+    const openai = raindrop.wrap(new OpenAI());
+
+    // Wrap your retrieval function
+    const searchDocs = raindrop.wrapTool('vector_search', async (query: string) => {
+      return await pinecone.query({ vector: await embed(query), topK: 5 });
+    });
+
+    async function ragQuery(userQuery: string, userId: string) {
+      return await raindrop.withInteraction({
+        event: 'rag_query',
+        userId,
+        input: userQuery,
+      }, async (ctx) => {
+        // 1. Retrieve - automatically traced as a span
+        const docs = await searchDocs(userQuery);
+
+        // 2. Generate - automatically traced as a span
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: `Context:\n${docs.map(d => d.text).join('\n')}` },
+            { role: 'user', content: userQuery },
+          ],
+        });
+
+        ctx.output = response.choices[0].message.content;
+        return ctx.output;
+      });
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from raindrop import Raindrop
+    from openai import OpenAI
+
+    raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+    openai_client = raindrop.wrap(OpenAI())
+
+    @raindrop.tool("vector_search")
+    async def search_docs(query: str) -> list[dict]:
+        return await pinecone.query(vector=await embed(query), top_k=5)
+
+    async def rag_query(user_query: str, user_id: str) -> str:
+        with raindrop.interaction(
+            event="rag_query",
+            user_id=user_id,
+            input=user_query,
+        ) as ctx:
+            # 1. Retrieve - automatically traced as a span
+            docs = await search_docs(user_query)
+
+            # 2. Generate - automatically traced as a span
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": f"Context:\n{chr(10).join(d['text'] for d in docs)}"},
+                    {"role": "user", "content": user_query},
+                ],
+            )
+
+            ctx.output = response.choices[0].message.content
+            return ctx.output
+    ```
+  </Tab>
+</Tabs>
+
+## Multi-turn Chat
+
+Track conversations with `conversationId`:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const openai = raindrop.wrap(new OpenAI());
+
+    // Identify the user once
+    raindrop.identify('user_123', { name: 'Alice', plan: 'pro' });
+
+    async function chat(conversationId: string, message: string) {
+      const history = await getConversationHistory(conversationId);
+
+      const response = await openai.chat.completions.create(
+        {
+          model: 'gpt-4o',
+          messages: [...history, { role: 'user', content: message }],
+        },
+        {
+          raindrop: { conversationId },  // Links all messages in thread
+        }
+      );
+
+      return {
+        content: response.choices[0].message.content,
+        traceId: response._traceId,  // For feedback
+      };
+    }
+
+    // Later, when user gives feedback
+    await raindrop.feedback(traceId, { type: 'thumbs_up' });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    openai_client = raindrop.wrap(OpenAI())
+
+    # Identify the user once
+    raindrop.identify("user_123", {"name": "Alice", "plan": "pro"})
+
+    def chat(conversation_id: str, message: str) -> dict:
+        history = get_conversation_history(conversation_id)
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[*history, {"role": "user", "content": message}],
+            raindrop={"conversation_id": conversation_id},  # Links all messages
+        )
+
+        return {
+            "content": response.choices[0].message.content,
+            "trace_id": response._trace_id,  # For feedback
+        }
+
+    # Later, when user gives feedback
+    raindrop.feedback(trace_id, {"type": "thumbs_up"})
+    ```
+  </Tab>
+</Tabs>
+
+## Tool-Using Agent
+
+Trace an agent that calls multiple tools:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    const openai = raindrop.wrap(new OpenAI());
+
+    // Define traced tools
+    const tools = {
+      search: raindrop.wrapTool('web_search', async (query: string) => {
+        return await searchAPI.search(query);
+      }),
+      calculate: raindrop.wrapTool('calculator', async (expr: string) => {
+        return eval(expr);  // Don't do this in production!
+      }),
+    };
+
+    async function runAgent(task: string, userId: string) {
+      return await raindrop.withInteraction({
+        event: 'agent_run',
+        userId,
+        input: task,
+      }, async (ctx) => {
+        let messages = [{ role: 'user' as const, content: task }];
+
+        while (true) {
+          const response = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages,
+            tools: [
+              { type: 'function', function: { name: 'search', parameters: { query: 'string' } } },
+              { type: 'function', function: { name: 'calculate', parameters: { expr: 'string' } } },
+            ],
+          });
+
+          const choice = response.choices[0];
+
+          if (choice.finish_reason === 'stop') {
+            ctx.output = choice.message.content;
+            return ctx.output;
+          }
+
+          // Execute tool calls - each is traced as a span
+          for (const toolCall of choice.message.tool_calls || []) {
+            const args = JSON.parse(toolCall.function.arguments);
+            const result = await tools[toolCall.function.name](args.query || args.expr);
+
+            messages.push(choice.message);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result),
+            });
+          }
+        }
+      });
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    openai_client = raindrop.wrap(OpenAI())
+
+    @raindrop.tool("web_search")
+    def search(query: str) -> list[dict]:
+        return search_api.search(query)
+
+    @raindrop.tool("calculator")
+    def calculate(expr: str) -> float:
+        return eval(expr)  # Don't do this in production!
+
+    def run_agent(task: str, user_id: str) -> str:
+        with raindrop.interaction(
+            event="agent_run",
+            user_id=user_id,
+            input=task,
+        ) as ctx:
+            messages = [{"role": "user", "content": task}]
+
+            while True:
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    tools=[
+                        {"type": "function", "function": {"name": "search", ...}},
+                        {"type": "function", "function": {"name": "calculate", ...}},
+                    ],
+                )
+
+                choice = response.choices[0]
+
+                if choice.finish_reason == "stop":
+                    ctx.output = choice.message.content
+                    return ctx.output
+
+                # Execute tool calls - each is traced as a span
+                for tool_call in choice.message.tool_calls or []:
+                    args = json.loads(tool_call.function.arguments)
+                    if tool_call.function.name == "search":
+                        result = search(args["query"])
+                    else:
+                        result = calculate(args["expr"])
+
+                    messages.append(choice.message)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result),
+                    })
+    ```
+  </Tab>
+</Tabs>
+
+## Streaming with Feedback
+
+Get the trace ID immediately for UI feedback buttons:
+
+```typescript
+const stream = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }],
+  stream: true,
+});
+
+// Trace ID is available BEFORE streaming starts
+const traceId = stream._traceId;
+console.log('Feedback buttons can use:', traceId);
+
+// Stream the response
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content || '');
+}
+// Trace is automatically finalized when stream ends
+```
+
+## Webhook Handler (Async)
+
+Resume an interaction in a webhook:
+
+```typescript
+// Initial request
+app.post('/api/generate', async (req, res) => {
+  const interaction = raindrop.begin({
+    event: 'async_generation',
+    userId: req.body.userId,
+    input: req.body.prompt,
+  });
+
+  await queueJob({
+    prompt: req.body.prompt,
+    interactionId: interaction.id,
+  });
+
+  res.json({ jobId: interaction.id });
+});
+
+// Webhook when job completes
+app.post('/webhook/job-complete', async (req, res) => {
+  const interaction = raindrop.resumeInteraction(req.body.interactionId);
+
+  interaction
+    .setProperty('processing_time_ms', req.body.processingTime)
+    .finish({ output: req.body.result });
+
+  res.json({ success: true });
+});
+```
+
+## Attachments for Context
+
+Include code, images, or documents with traces:
+
+```typescript
+const interaction = raindrop.begin({
+  event: 'code_review',
+  userId: 'user_123',
+  input: 'Review this code',
+  attachments: [
+    {
+      type: 'code',
+      name: 'main.py',
+      value: 'def hello():\n    print("world")',
+      role: 'input',
+      language: 'python',
+    },
+  ],
+});
+
+const response = await openai.chat.completions.create({ ... });
+
+interaction.addAttachments([
+  {
+    type: 'text',
+    name: 'review',
+    value: response.choices[0].message.content,
+    role: 'output',
+  },
+]);
+
+interaction.finish();
+```

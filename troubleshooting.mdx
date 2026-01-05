@@ -1,0 +1,202 @@
+---
+title: Troubleshooting
+description: Common issues and how to fix them
+---
+
+# Troubleshooting
+
+Quick fixes for common issues.
+
+## Traces Not Appearing
+
+**Symptom**: You're calling wrapped clients but traces don't show in the dashboard.
+
+**Check these in order:**
+
+1. **Is tracking disabled?**
+   ```typescript
+   // Make sure disabled is false or undefined
+   const raindrop = new Raindrop({
+     apiKey: '...',
+     disabled: false,  // Check this!
+   });
+   ```
+
+2. **Is the API key correct?**
+   ```typescript
+   // Enable debug mode to see what's happening
+   const raindrop = new Raindrop({
+     apiKey: process.env.RAINDROP_API_KEY,
+     debug: true,  // Will log all events to console
+   });
+   ```
+
+3. **Is the process exiting before flush?**
+   ```typescript
+   // Call close() before your process exits
+   await raindrop.close();
+   ```
+
+4. **Network issues?**
+   - Check firewall rules for `api.raindrop.ai`
+   - Enable `debug: true` to see HTTP errors
+
+## `_traceId` is Undefined
+
+**Symptom**: `response._traceId` returns `undefined`.
+
+**Causes:**
+
+1. **Client not wrapped:**
+   ```typescript
+   // Wrong - using unwrapped client
+   const openai = new OpenAI();
+
+   // Correct - wrap it first
+   const openai = raindrop.wrap(new OpenAI());
+   ```
+
+2. **Accessing too early on streams:**
+   ```typescript
+   // For streaming, _traceId is available immediately on the stream object
+   const stream = await openai.chat.completions.create({ ..., stream: true });
+   console.log(stream._traceId);  // Available here, before iterating
+   ```
+
+3. **Fallback option:**
+   ```typescript
+   const traceId = raindrop.getLastTraceId();
+   ```
+
+## Streaming Traces Incomplete
+
+**Symptom**: Streamed responses show partial output.
+
+**Fix**: Make sure you consume the entire stream:
+
+```typescript
+const stream = await openai.chat.completions.create({ ..., stream: true });
+
+// You MUST iterate through the entire stream
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content || '');
+}
+// Trace is finalized here, when stream ends
+```
+
+If you break out of the loop early, the trace won't capture the full response.
+
+## Interactions Not Linking Spans
+
+**Symptom**: AI calls inside `withInteraction` aren't appearing as spans.
+
+**Check:**
+
+1. **Using wrapped client inside the callback?**
+   ```typescript
+   const openai = raindrop.wrap(new OpenAI());  // Wrap BEFORE
+
+   await raindrop.withInteraction({ ... }, async (ctx) => {
+     // This client is already wrapped, so it auto-links
+     await openai.chat.completions.create({ ... });
+   });
+   ```
+
+2. **Are you awaiting the calls?**
+   ```typescript
+   // Wrong - not awaited, may complete after interaction ends
+   raindrop.withInteraction({ ... }, async (ctx) => {
+     openai.chat.completions.create({ ... });  // Missing await!
+   });
+
+   // Correct
+   await raindrop.withInteraction({ ... }, async (ctx) => {
+     await openai.chat.completions.create({ ... });
+   });
+   ```
+
+## Python: Import Errors
+
+**Symptom**: `ModuleNotFoundError: No module named 'raindrop'`
+
+**Fix**: The package name on PyPI is `rd-mini`, but the import is `raindrop`:
+
+```bash
+pip install rd-mini
+```
+
+```python
+from raindrop import Raindrop  # Not 'from rd_mini'
+```
+
+## Browser: API Key Security Warning
+
+**Symptom**: Worried about exposing API key in browser.
+
+**Solution**: Proxy through your backend:
+
+```typescript
+// Frontend - calls your backend
+const response = await fetch('/api/track', {
+  method: 'POST',
+  body: JSON.stringify({ event: 'chat', input, output }),
+});
+
+// Backend - uses raindrop with your API key
+app.post('/api/track', async (req, res) => {
+  await raindrop.trackAi(req.body);
+  res.json({ success: true });
+});
+```
+
+Or use a restricted API key with limited permissions.
+
+## High Latency on First Request
+
+**Symptom**: First traced call is slow.
+
+**Cause**: Connection establishment overhead.
+
+**Mitigations:**
+
+1. **Pre-warm in production:**
+   ```typescript
+   // Call after initialization to establish connection
+   await raindrop.flush();
+   ```
+
+2. **Increase flush interval for high-volume:**
+   ```typescript
+   const raindrop = new Raindrop({
+     apiKey: '...',
+     flushInterval: 5000,  // Batch more aggressively
+     maxQueueSize: 200,    // Larger batches
+   });
+   ```
+
+## Debug Mode
+
+Enable detailed logging to diagnose issues:
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+  debug: true,
+});
+```
+
+You'll see:
+- `[raindrop] Initialized with base URL: ...`
+- `[raindrop] Wrapping openai client`
+- `[raindrop] Queued trace: trace_xxx`
+- `[raindrop] Flushing 3 events`
+- `[raindrop] Sent 3 events successfully`
+
+## Still Stuck?
+
+1. Check the [GitHub issues](https://github.com/ryandonofrio/rd-mini/issues)
+2. Enable `debug: true` and check logs
+3. Open an issue with:
+   - SDK version (`npm list rd-mini` or `pip show rd-mini`)
+   - Minimal reproduction code
+   - Debug output

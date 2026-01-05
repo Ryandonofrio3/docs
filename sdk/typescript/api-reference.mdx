@@ -21,6 +21,9 @@ new Raindrop(config: RaindropConfig)
 | `baseUrl` | `string` | No | API base URL (default: `https://api.raindrop.ai`) |
 | `debug` | `boolean` | No | Enable debug logging |
 | `disabled` | `boolean` | No | Disable all tracking |
+| `flushInterval` | `number` | No | Ms between auto-flushes (default: 1000) |
+| `maxQueueSize` | `number` | No | Flush at this queue size (default: 100) |
+| `maxRetries` | `number` | No | Retry failed requests (default: 3) |
 
 ### Methods
 
@@ -127,6 +130,34 @@ const traceId = raindrop.getLastTraceId();
 
 ---
 
+#### `trackSignal(options)`
+
+Send a custom signal with full control over sentiment and type.
+
+```typescript
+await raindrop.trackSignal({
+  eventId: 'trace_123',
+  name: 'quality_review',
+  sentiment: 'POSITIVE',   // 'POSITIVE' | 'NEGATIVE'
+  type: 'feedback',        // 'default' | 'feedback' | 'edit'
+  comment: 'Detailed feedback',
+  after: 'Corrected text', // For edit signals
+  properties: { ... },
+});
+```
+
+---
+
+#### `flush()`
+
+Manually flush all pending events without closing.
+
+```typescript
+await raindrop.flush();
+```
+
+---
+
 #### `close()`
 
 Flush all pending events and close the transport.
@@ -202,3 +233,20 @@ interaction.finish({
   properties: { ... },
 });
 ```
+
+---
+
+#### `withTool(options, fn)`
+
+Execute and trace a tool inline within the interaction.
+
+```typescript
+const results = await interaction.withTool(
+  { name: 'search_docs', properties: { source: 'pinecone' } },
+  async () => {
+    return await vectorDB.search(query);
+  }
+);
+```
+
+Automatically adds a span to the interaction with timing and result.

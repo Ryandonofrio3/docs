@@ -81,3 +81,36 @@ console.log(stream._traceId);
 // Fallback
 const traceId = raindrop.getLastTraceId();
 ```
+
+## Custom Signals
+
+For more control than thumbs up/down, use `trackSignal()`:
+
+```typescript
+await raindrop.trackSignal({
+  eventId: response._traceId,
+  name: 'quality_review',
+  sentiment: 'POSITIVE',        // or 'NEGATIVE'
+  type: 'feedback',             // 'default' | 'feedback' | 'edit'
+  comment: 'Detailed feedback here',
+  properties: {
+    reviewer: 'qa_team',
+    category: 'accuracy',
+  },
+});
+```
+
+### Edit Signals
+
+Track when users edit AI responses:
+
+```typescript
+await raindrop.trackSignal({
+  eventId: response._traceId,
+  name: 'user_edit',
+  type: 'edit',
+  sentiment: 'NEGATIVE',
+  after: 'The corrected response text',  // What the user changed it to
+  comment: 'Fixed the date',
+});
+```

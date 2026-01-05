@@ -45,6 +45,11 @@ raindrop = Raindrop(
     base_url="https://api.raindrop.ai",  # Custom API endpoint
     debug=True,                           # Log all events to console
     disabled=os.environ.get("ENV") == "test",  # Disable in tests
+
+    # Advanced (tune for production)
+    flush_interval=1.0,   # Seconds between auto-flushes (default: 1.0)
+    max_queue_size=100,   # Flush when queue reaches this size (default: 100)
+    max_retries=3,        # Retry failed requests (default: 3)
 )
 ```
 
