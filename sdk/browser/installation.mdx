@@ -5,16 +5,30 @@ description: Install the Browser SDK
 
 # Installation
 
-The Browser SDK is a lightweight client-side SDK for tracking AI events and feedback from web applications.
+The Browser SDK is a lightweight client-side SDK for tracking AI events and feedback from web applications. It's included in the main `rd-mini` package with a separate entry point.
 
-```bash
-npm install rd-mini-browser
-```
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install rd-mini
+    ```
+  </Tab>
+  <Tab title="bun">
+    ```bash
+    bun add rd-mini
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add rd-mini
+    ```
+  </Tab>
+</Tabs>
 
 ## Basic Setup
 
 ```typescript
-import { Raindrop } from 'rd-mini-browser';
+import { Raindrop } from 'rd-mini/browser';
 
 const raindrop = new Raindrop({
   apiKey: 'your-api-key',
