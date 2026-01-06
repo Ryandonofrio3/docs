@@ -122,7 +122,7 @@ If you break out of the loop early, the trace won't capture the full response.
 **Fix**: The package name on PyPI is `rd-mini`, but the import is `raindrop`:
 
 ```bash
-pip install rd-mini
+uv add rd-mini
 ```
 
 ```python
@@ -197,6 +197,6 @@ You'll see:
 1. Check the [GitHub issues](https://github.com/ryandonofrio/rd-mini/issues)
 2. Enable `debug: true` and check logs
 3. Open an issue with:
-   - SDK version (`npm list rd-mini` or `pip show rd-mini`)
+   - SDK version (`bun pm ls` or `uv pip show rd-mini`)
    - Minimal reproduction code
    - Debug output

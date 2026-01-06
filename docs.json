@@ -55,6 +55,14 @@
               "integrations/anthropic",
               "integrations/vercel-ai-sdk"
             ]
+          },
+          {
+            "group": "Plugins",
+            "pages": [
+              "plugins/index",
+              "plugins/pii",
+              "plugins/otel"
+            ]
           }
         ]
       },

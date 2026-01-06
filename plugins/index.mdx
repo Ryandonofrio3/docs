@@ -1,0 +1,158 @@
+---
+title: Plugins
+description: Extend rd-mini with optional plugins
+---
+
+# Plugins
+
+rd-mini has a minimal core with zero required dependencies beyond `fetch`. Optional plugins let you add enterprise features without bloating the core.
+
+## Available Plugins
+
+<CardGroup cols={2}>
+  <Card title="PII Redaction" icon="shield" href="/plugins/pii">
+    Automatically redact emails, phone numbers, SSNs, and more before data leaves your app.
+  </Card>
+  <Card title="OpenTelemetry" icon="chart-line" href="/plugins/otel">
+    Export traces to Datadog, Honeycomb, Jaeger, and other OTEL backends.
+  </Card>
+</CardGroup>
+
+## Using Plugins
+
+Plugins are passed to the `plugins` config option:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Raindrop } from 'rd-mini';
+    import { createPiiPlugin } from 'rd-mini/plugins/pii';
+    import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+    const raindrop = new Raindrop({
+      apiKey: process.env.RAINDROP_API_KEY,
+      plugins: [
+        createOtelPlugin({ serviceName: 'my-service' }),
+        createPiiPlugin(),
+      ],
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os
+    from rd_mini import Raindrop
+    from rd_mini.plugins import create_pii_plugin, create_otel_plugin
+
+    raindrop = Raindrop(
+        api_key=os.environ["RAINDROP_API_KEY"],
+        plugins=[
+            create_otel_plugin(service_name="my-service"),
+            create_pii_plugin(),
+        ],
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Plugin Order
+
+Plugins run in order. This matters when plugins transform data:
+
+```typescript
+plugins: [
+  createOtelPlugin(),  // Sees original data
+  createPiiPlugin(),   // Redacts before transport
+]
+```
+
+With this order:
+- OTEL sees the original input/output
+- Raindrop's transport sees redacted data
+
+## Convenience Options
+
+Some plugins have convenience flags in the main config:
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey,
+  redactPii: true,  // Equivalent to adding createPiiPlugin()
+});
+```
+
+## Creating Custom Plugins
+
+Plugins implement the `RaindropPlugin` interface:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import type { RaindropPlugin, TraceData, SpanData, InteractionContext } from 'rd-mini';
+
+    const myPlugin: RaindropPlugin = {
+      name: 'my-plugin',
+
+      // Called when an interaction starts
+      onInteractionStart(ctx: InteractionContext) {
+        console.log('Interaction started:', ctx.interactionId);
+      },
+
+      // Called when an interaction ends (can mutate ctx)
+      onInteractionEnd(ctx: InteractionContext) {
+        ctx.properties = { ...ctx.properties, custom: 'value' };
+      },
+
+      // Called when a span completes (can mutate span)
+      onSpan(span: SpanData) {
+        console.log('Span:', span.name, span.latencyMs);
+      },
+
+      // Called when a trace is created (can mutate trace)
+      onTrace(trace: TraceData) {
+        trace.properties = { ...trace.properties, custom: 'value' };
+      },
+
+      // Called during flush
+      async flush() {
+        // Send any buffered data
+      },
+
+      // Called during shutdown
+      async shutdown() {
+        // Cleanup resources
+      },
+    };
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from rd_mini.types import RaindropPlugin, TraceData, SpanData, InteractionContext
+
+    class MyPlugin:
+        name = "my-plugin"
+
+        def on_interaction_start(self, ctx: InteractionContext) -> None:
+            print(f"Interaction started: {ctx.interaction_id}")
+
+        def on_interaction_end(self, ctx: InteractionContext) -> None:
+            ctx.properties["custom"] = "value"
+
+        def on_span(self, span: SpanData) -> None:
+            print(f"Span: {span.name} {span.latency_ms}ms")
+
+        def on_trace(self, trace: TraceData) -> None:
+            trace.properties["custom"] = "value"
+
+        async def flush(self) -> None:
+            pass  # Send any buffered data
+
+        async def shutdown(self) -> None:
+            pass  # Cleanup resources
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+Plugins can mutate data in their hooks. This is how PII redaction works - it modifies the input/output before transport sends it.
+</Note>

@@ -3,9 +3,9 @@ title: rd-mini
 description: Zero-config AI observability. Two lines to get started.
 ---
 
-# rd-mini
+Raindrop is the monitoring platform for AI agents. Similar to how Sentry tracks errors in your web apps, Raindrop discovers silent agent failures in production.
 
-Zero-config AI observability SDK. Wrap your AI client once, trace everything automatically.
+
 
 <CardGroup cols={2}>
   <Card title="TypeScript" icon="js" href="/sdk/typescript/installation">
@@ -22,56 +22,14 @@ Zero-config AI observability SDK. Wrap your AI client once, trace everything aut
   </Card>
 </CardGroup>
 
-## The Problem
 
-Traditional AI observability requires 30+ lines of OpenTelemetry setup:
 
-```typescript
-// instrumentation.ts - complex OTEL setup
-import { registerOTel } from '@vercel/otel';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
-// ... more imports and configuration
-
-// Then at EVERY call site:
-const result = await generateText({
-  model: openai('gpt-4o'),
-  prompt: message,
-  experimental_telemetry: {
-    isEnabled: true,  // Easy to forget!
-    functionId: 'chat',
-    metadata: { ... },
-  },
-});
-```
-
-Miss one `experimental_telemetry`? No trace.
-
-## The Solution
-
-```typescript
-import { Raindrop } from 'rd-mini';
-import OpenAI from 'openai';
-
-const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
-const openai = raindrop.wrap(new OpenAI());
-
-// That's it. Every call is now traced.
-const response = await openai.chat.completions.create({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: 'Hello!' }],
-});
-
-console.log(response._traceId); // Access trace ID for feedback
-```
-
-## Features
-
-- **Zero config** - No OTEL setup, no instrumentation files
-- **Wrap once** - All calls automatically traced
-- **Works with streaming** - Full output captured when stream completes
-- **Multi-provider** - OpenAI, Anthropic, Vercel AI SDK
-- **Feedback** - Connect user ratings to specific traces
-- **Interactions** - Group multi-step pipelines (RAG, agents)
+AI agents fail differently than traditional software. A 500 error is obvious. An agent that confidently gives wrong information, forgets something the user said 3 messages ago, or takes a suboptimal path are failures invisible to traditional monitoring.
+Raindrop helps you:
+Detect issues automatically: default signals catch common failure modes like forgetting, user frustration, and task failures
+Search across millions of interactions: Use Deep Search to find specific issues in your production data with natural language
+Track custom signals: Define any signal you care about (eg. syntax errors, aesthetic complaints, agent stuck in a loop) and track it at scale
+A/B test your agents: Run experiments to validate that your fixes actually worked
 
 ## Start Here
 

@@ -162,7 +162,7 @@ Trace an agent that calls multiple tools:
         return await searchAPI.search(query);
       }),
       calculate: raindrop.wrapTool('calculator', async (expr: string) => {
-        return eval(expr);  // Don't do this in production!
+        return mathjs.evaluate(expr);
       }),
     };
 
@@ -218,7 +218,7 @@ Trace an agent that calls multiple tools:
 
     @raindrop.tool("calculator")
     def calculate(expr: str) -> float:
-        return eval(expr)  # Don't do this in production!
+        return simpleeval.simple_eval(expr)
 
     def run_agent(task: str, user_id: str) -> str:
         with raindrop.interaction(

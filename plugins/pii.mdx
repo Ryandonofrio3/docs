@@ -1,0 +1,160 @@
+---
+title: PII Redaction
+description: Automatically redact sensitive data before it leaves your app
+---
+
+# PII Redaction Plugin
+
+The PII plugin redacts personally identifiable information from your traces before they're sent to Raindrop. This ensures sensitive data like emails, phone numbers, and credit cards never leave your infrastructure.
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Raindrop } from 'rd-mini';
+
+    // Option 1: Use convenience flag
+    const raindrop = new Raindrop({
+      apiKey: process.env.RAINDROP_API_KEY,
+      redactPii: true,
+    });
+
+    // Option 2: Use plugin directly for more control
+    import { createPiiPlugin } from 'rd-mini/plugins/pii';
+
+    const raindrop = new Raindrop({
+      apiKey: process.env.RAINDROP_API_KEY,
+      plugins: [
+        createPiiPlugin({
+          patterns: ['email', 'phone', 'ssn'],
+        }),
+      ],
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os
+    from rd_mini import Raindrop
+
+    # Option 1: Use convenience flag
+    raindrop = Raindrop(
+        api_key=os.environ["RAINDROP_API_KEY"],
+        redact_pii=True,
+    )
+
+    # Option 2: Use plugin directly for more control
+    from rd_mini.plugins import create_pii_plugin
+
+    raindrop = Raindrop(
+        api_key=os.environ["RAINDROP_API_KEY"],
+        plugins=[
+            create_pii_plugin(patterns=["email", "phone", "ssn"]),
+        ],
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## What Gets Redacted
+
+The plugin redacts the following by default:
+
+| Pattern | Example | Redacted As |
+|---------|---------|-------------|
+| `email` | `user@example.com` | `<REDACTED>` |
+| `phone` | `(555) 123-4567` | `<REDACTED>` |
+| `ssn` | `123-45-6789` | `<REDACTED>` |
+| `creditCard` | `4111-1111-1111-1111` | `<REDACTED>` |
+| `credentials` | `api_key: sk-xxx` | `<REDACTED>` |
+| `address` | `123 Main Street` | `<REDACTED>` |
+| `password` | `password: secret` | `<REDACTED>` |
+
+## Configuration Options
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    createPiiPlugin({
+      // Which patterns to use (default: all)
+      patterns: ['email', 'phone', 'ssn', 'creditCard', 'credentials', 'address', 'password'],
+
+      // Custom regex patterns
+      customPatterns: [/INTERNAL-\d+/g],
+
+      // Strings to never redact
+      allowList: ['support@company.com'],
+
+      // Replacement text (default: <REDACTED>)
+      replacement: '[REMOVED]',
+
+      // Redact names in greetings like "Hi John" (default: false)
+      redactNames: true,
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import re
+
+    create_pii_plugin(
+        # Which patterns to use (default: all)
+        patterns=["email", "phone", "ssn", "credit_card", "credentials", "address", "password"],
+
+        # Custom regex patterns
+        custom_patterns=[re.compile(r"INTERNAL-\d+")],
+
+        # Strings to never redact
+        allow_list=["support@company.com"],
+
+        # Replacement text (default: <REDACTED>)
+        replacement="[REMOVED]",
+
+        # Redact names in greetings like "Hi John" (default: False)
+        redact_names=True,
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## What Gets Redacted
+
+The plugin applies redaction to:
+
+- **Trace input/output** - Messages sent to and from AI models
+- **Span input/output** - Tool inputs and outputs
+- **Interaction input/output** - Multi-step workflow data
+- **Tool call arguments** - Function parameters
+
+## Example
+
+**Before redaction:**
+```
+Hi, my email is john@example.com and my phone is (555) 123-4567.
+My SSN is 123-45-6789.
+```
+
+**After redaction:**
+```
+Hi, my email is <REDACTED> and my phone is <REDACTED>.
+My SSN is <REDACTED>.
+```
+
+## Plugin Order
+
+If you use multiple plugins, PII redaction should typically run **last** so other plugins (like OTEL) see the original data:
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey,
+  plugins: [
+    createOtelPlugin(), // Sees original data
+    createPiiPlugin(),  // Redacts before transport
+  ],
+});
+```
+
+<Note>
+When using the `redactPii: true` convenience option, the PII plugin is automatically added first in the plugin chain.
+</Note>

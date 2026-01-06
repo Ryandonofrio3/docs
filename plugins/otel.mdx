@@ -1,0 +1,213 @@
+---
+title: OpenTelemetry Export
+description: Export traces to OTEL-compatible backends like Datadog and Honeycomb
+---
+
+# OpenTelemetry Export Plugin
+
+The OTEL plugin exports your AI traces to OpenTelemetry-compatible backends like Datadog, Honeycomb, Jaeger, and others. This lets you view AI observability data alongside your existing infrastructure metrics.
+
+## Prerequisites
+
+Install the OpenTelemetry API:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```bash
+    bun add @opentelemetry/api
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```bash
+    uv add opentelemetry-api opentelemetry-sdk
+    ```
+  </Tab>
+</Tabs>
+
+## Quick Start
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { Raindrop } from 'rd-mini';
+    import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+    const raindrop = new Raindrop({
+      apiKey: process.env.RAINDROP_API_KEY,
+      plugins: [
+        createOtelPlugin({
+          serviceName: 'my-ai-service',
+        }),
+      ],
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    import os
+    from rd_mini import Raindrop
+    from rd_mini.plugins import create_otel_plugin
+
+    raindrop = Raindrop(
+        api_key=os.environ["RAINDROP_API_KEY"],
+        plugins=[
+            create_otel_plugin(service_name="my-ai-service"),
+        ],
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration Options
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    createOtelPlugin({
+      // Service name for OTEL spans
+      serviceName: 'my-ai-service',
+
+      // Custom tracer name (default: 'raindrop')
+      tracerName: 'raindrop',
+
+      // Include input/output as span attributes (default: true)
+      includeContent: true,
+
+      // Attribute prefix (default: 'raindrop')
+      attributePrefix: 'raindrop',
+    });
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    create_otel_plugin(
+        # Service name for OTEL spans
+        service_name="my-ai-service",
+
+        # Custom tracer name (default: 'raindrop')
+        tracer_name="raindrop",
+
+        # Include input/output as span attributes (default: True)
+        include_content=True,
+
+        # Attribute prefix (default: 'raindrop')
+        attribute_prefix="raindrop",
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Backend Setup
+
+The plugin uses the global OTEL TracerProvider. Configure your backend before creating the Raindrop instance:
+
+### Datadog
+
+```typescript
+// Datadog's dd-trace automatically sets up OTEL
+import 'dd-trace/init';
+import { Raindrop } from 'rd-mini';
+import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+  plugins: [createOtelPlugin({ serviceName: 'my-ai-service' })],
+});
+```
+
+### Honeycomb
+
+```typescript
+import { HoneycombSDK } from '@honeycombio/opentelemetry-node';
+import { Raindrop } from 'rd-mini';
+import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+// Initialize Honeycomb
+new HoneycombSDK().start();
+
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+  plugins: [createOtelPlugin({ serviceName: 'my-ai-service' })],
+});
+```
+
+### Generic OTLP Exporter
+
+```typescript
+import { trace } from '@opentelemetry/api';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+
+// Set up OTEL provider
+const provider = new NodeTracerProvider();
+provider.addSpanProcessor(
+  new BatchSpanProcessor(
+    new OTLPTraceExporter({
+      url: 'https://otel-collector.internal:4318/v1/traces',
+    })
+  )
+);
+provider.register();
+
+// Now create Raindrop
+import { Raindrop } from 'rd-mini';
+import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+  plugins: [createOtelPlugin({ serviceName: 'my-ai-service' })],
+});
+```
+
+## Span Attributes
+
+The plugin sets the following attributes on OTEL spans:
+
+| Attribute | Description |
+|-----------|-------------|
+| `raindrop.service` | Service name |
+| `raindrop.type` | Span type (`ai`, `tool`, `interaction`) |
+| `raindrop.model` | AI model name |
+| `raindrop.provider` | Provider (`openai`, `anthropic`) |
+| `raindrop.user_id` | User identifier |
+| `raindrop.conversation_id` | Conversation thread ID |
+| `raindrop.latency_ms` | Response time in milliseconds |
+| `raindrop.tokens.input` | Input token count |
+| `raindrop.tokens.output` | Output token count |
+| `raindrop.input` | Prompt/input (if `includeContent: true`) |
+| `raindrop.output` | Response/output (if `includeContent: true`) |
+| `raindrop.error` | Error message if failed |
+
+## Span Structure
+
+The plugin creates spans for:
+
+- **Interactions** - Parent spans for multi-step workflows
+- **AI Calls** - Spans for each wrapped AI provider call
+- **Tools** - Spans for traced tool invocations
+
+```
+interaction:rag_query
+├── tool:search_docs
+├── tool:rerank
+└── ai:openai:gpt-4o
+```
+
+## Combining with PII Redaction
+
+When using both plugins, order matters. OTEL should come **before** PII so it sees original data:
+
+```typescript
+const raindrop = new Raindrop({
+  apiKey,
+  plugins: [
+    createOtelPlugin(),  // Sees original data
+    createPiiPlugin(),   // Redacts before Raindrop transport
+  ],
+});
+```
+
+<Warning>
+If you want OTEL to see redacted data, reverse the order. But typically OTEL backends are internal and trusted.
+</Warning>
