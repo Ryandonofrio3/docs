@@ -3,9 +3,6 @@ title: API Reference
 description: Python SDK API reference
 ---
 
-# API Reference
-
-Complete reference for the rd-mini Python SDK.
 
 ## Raindrop
 
@@ -25,13 +22,15 @@ Raindrop(
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `api_key` | `str` | Yes | Your Raindrop API key |
+| `api_key` | `str` | Yes | Your Raindrop API key (or use `write_key` for backwards compat) |
 | `base_url` | `str` | No | API base URL |
 | `debug` | `bool` | No | Enable debug logging |
 | `disabled` | `bool` | No | Disable all tracking |
 | `flush_interval` | `float` | No | Seconds between auto-flushes (default: 1.0) |
 | `max_queue_size` | `int` | No | Flush at this queue size (default: 100) |
 | `max_retries` | `int` | No | Retry failed requests (default: 3) |
+| `plugins` | `list[RaindropPlugin]` | No | List of plugins (PII, OTEL, custom) |
+| `redact_pii` | `bool` | No | Shorthand for adding PII plugin |
 
 ### Methods
 
@@ -155,6 +154,34 @@ Flush all pending events and close the transport.
 
 ```python
 raindrop.close()
+```
+
+---
+
+#### `track_signal(options)`
+
+Send a custom signal.
+
+```python
+raindrop.track_signal(
+    event_id="trace_123",
+    name="quality_review",
+    sentiment="POSITIVE",   # "POSITIVE" | "NEGATIVE"
+    type="feedback",        # "default" | "feedback" | "edit"
+    comment="Detailed feedback",
+)
+```
+
+---
+
+#### `start_span(name, kind="task", ...)`
+
+Create a manual span for tracing operations.
+
+```python
+with raindrop.start_span("process_data", kind="task") as span:
+    result = process(data)
+    span.set_output(result)
 ```
 
 ---

@@ -1,0 +1,224 @@
+---
+title: AWS Bedrock
+description: Auto-trace AWS Bedrock Converse API calls
+---
+
+# AWS Bedrock Integration
+
+Automatically trace all AWS Bedrock API calls using the Converse API. Works with all Bedrock foundation models including Claude, Llama, Titan, Mistral, and more.
+
+## Supported Features
+
+| Feature | Streaming | Tool Calls | Token Counting |
+|---------|-----------|------------|----------------|
+| Converse | N/A | Yes | Yes |
+| ConverseStream | Yes | Yes | Yes |
+
+## TypeScript
+
+```bash
+bun add rd-mini @aws-sdk/client-bedrock-runtime
+```
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const bedrock = raindrop.wrap(new BedrockRuntimeClient({ region: 'us-east-1' }));
+
+// Non-streaming
+const response = await bedrock.send(new ConverseCommand({
+  modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  messages: [
+    { role: 'user', content: [{ text: 'Hello!' }] }
+  ],
+}));
+
+console.log(response.output?.message?.content?.[0]?.text);
+console.log(response._traceId); // Access trace ID
+```
+
+### Streaming
+
+```typescript
+import { ConverseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
+
+const response = await bedrock.send(new ConverseStreamCommand({
+  modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  messages: [
+    { role: 'user', content: [{ text: 'Write a poem' }] }
+  ],
+}));
+
+console.log(response._traceId); // Available immediately
+
+for await (const event of response.stream!) {
+  if (event.contentBlockDelta?.delta?.text) {
+    process.stdout.write(event.contentBlockDelta.delta.text);
+  }
+}
+// Trace is automatically completed when stream ends
+```
+
+### Tool Use
+
+```typescript
+const response = await bedrock.send(new ConverseCommand({
+  modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+  messages: [
+    { role: 'user', content: [{ text: 'What is the weather in SF?' }] }
+  ],
+  toolConfig: {
+    tools: [{
+      toolSpec: {
+        name: 'get_weather',
+        description: 'Get the current weather',
+        inputSchema: {
+          json: {
+            type: 'object',
+            properties: {
+              location: { type: 'string' }
+            },
+            required: ['location']
+          }
+        }
+      }
+    }]
+  }
+}));
+
+// Tool calls are automatically captured in the trace
+```
+
+### Per-Request Options
+
+```typescript
+const response = await bedrock.send(
+  new ConverseCommand({
+    modelId: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    messages: [{ role: 'user', content: [{ text: 'Hello!' }] }],
+  }),
+  {
+    raindrop: {
+      userId: 'user_123',
+      conversationId: 'conv_456',
+      properties: { experiment: 'v2' },
+    },
+  }
+);
+```
+
+## Python
+
+```bash
+uv add rd-mini boto3
+```
+
+```python
+import os
+import boto3
+from rd_mini import Raindrop
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+bedrock = raindrop.wrap(boto3.client("bedrock-runtime", region_name="us-east-1"))
+
+# Non-streaming
+response = bedrock.converse(
+    modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    messages=[
+        {"role": "user", "content": [{"text": "Hello!"}]}
+    ],
+)
+
+print(response["output"]["message"]["content"][0]["text"])
+print(response["_trace_id"])  # Access trace ID
+```
+
+### Streaming
+
+```python
+response = bedrock.converse_stream(
+    modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    messages=[
+        {"role": "user", "content": [{"text": "Write a poem"}]}
+    ],
+)
+
+for event in response["stream"]:
+    if "contentBlockDelta" in event:
+        delta = event["contentBlockDelta"].get("delta", {})
+        if "text" in delta:
+            print(delta["text"], end="")
+# Trace is automatically completed when stream ends
+```
+
+### Per-Request Options
+
+```python
+response = bedrock.converse(
+    modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
+    messages=[{"role": "user", "content": [{"text": "Hello!"}]}],
+    raindrop={
+        "user_id": "user_123",
+        "conversation_id": "conv_456",
+        "properties": {"experiment": "v2"},
+    },
+)
+```
+
+## Supported Models
+
+The wrapper automatically detects the provider from the model ID:
+
+| Provider | Example Model IDs |
+|----------|-------------------|
+| Anthropic | `anthropic.claude-3-5-sonnet-*`, `anthropic.claude-3-haiku-*` |
+| Amazon | `amazon.titan-*`, `amazon.nova-*` |
+| Meta | `meta.llama3-*`, `meta.llama2-*` |
+| Mistral | `mistral.mistral-*`, `mistral.mixtral-*` |
+| Cohere | `cohere.command-*` |
+| AI21 | `ai21.jamba-*`, `ai21.j2-*` |
+
+## What's Captured
+
+Every Bedrock call automatically captures:
+
+- **Model** - Full model ID (e.g., `anthropic.claude-3-5-sonnet-20241022-v2:0`)
+- **Provider** - Inferred provider (e.g., `anthropic`, `amazon`, `meta`)
+- **Input** - Messages sent to the model
+- **Output** - Model's response (including streamed content)
+- **Tokens** - Input, output, and total token counts
+- **Latency** - Time from request to response
+- **Tool Calls** - Tool names, IDs, and arguments
+- **Stop Reason** - Why generation stopped
+- **Errors** - Any errors that occurred
+
+## Cross-Region Inference
+
+Works with Bedrock cross-region inference profiles:
+
+```typescript
+const response = await bedrock.send(new ConverseCommand({
+  modelId: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0', // Cross-region prefix
+  messages: [{ role: 'user', content: [{ text: 'Hello!' }] }],
+}));
+```
+
+## Amazon Nova Models
+
+Full support for Amazon Nova models:
+
+```typescript
+// Nova Pro
+const response = await bedrock.send(new ConverseCommand({
+  modelId: 'amazon.nova-pro-v1:0',
+  messages: [{ role: 'user', content: [{ text: 'Explain quantum computing' }] }],
+}));
+
+// Nova Lite
+const response = await bedrock.send(new ConverseCommand({
+  modelId: 'amazon.nova-lite-v1:0',
+  messages: [{ role: 'user', content: [{ text: 'Hello!' }] }],
+}));
+```

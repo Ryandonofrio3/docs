@@ -3,9 +3,7 @@ title: API Reference
 description: TypeScript SDK API reference
 ---
 
-# API Reference
 
-Complete reference for the rd-mini TypeScript SDK.
 
 ## Raindrop
 
@@ -17,13 +15,15 @@ new Raindrop(config: RaindropConfig)
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `apiKey` | `string` | Yes | Your Raindrop API key |
+| `apiKey` | `string` | Yes | Your Raindrop API key (or use `writeKey` for backwards compat) |
 | `baseUrl` | `string` | No | API base URL (default: `https://api.raindrop.ai`) |
 | `debug` | `boolean` | No | Enable debug logging |
 | `disabled` | `boolean` | No | Disable all tracking |
 | `flushInterval` | `number` | No | Ms between auto-flushes (default: 1000) |
 | `maxQueueSize` | `number` | No | Flush at this queue size (default: 100) |
 | `maxRetries` | `number` | No | Retry failed requests (default: 3) |
+| `plugins` | `RaindropPlugin[]` | No | Array of plugins (PII, OTEL, custom) |
+| `redactPii` | `boolean` | No | Shorthand for adding PII plugin |
 
 ### Methods
 
@@ -164,6 +164,22 @@ Flush all pending events and close the transport.
 
 ```typescript
 await raindrop.close();
+```
+
+---
+
+#### `startSpan(name, options?)`
+
+Create a manual span for tracing operations.
+
+```typescript
+const span = raindrop.startSpan('process_data', { kind: 'task' });
+try {
+  const result = await process(data);
+  span.setOutput(result);
+} finally {
+  span.end();
+}
 ```
 
 ---

@@ -1,0 +1,190 @@
+---
+title: Google Gemini
+description: Auto-trace Google Gemini API calls
+---
+
+# Google Gemini Integration
+
+Automatically trace all Google Gemini API calls with zero code changes to your existing implementation.
+
+<Note>
+  Uses the new `@google/genai` SDK (not the deprecated `@google/generative-ai`).
+</Note>
+
+## Supported Features
+
+| Feature | Streaming | Tool Calls | Token Counting |
+|---------|-----------|------------|----------------|
+| generateContent | N/A | Yes | Yes |
+| generateContentStream | Yes | Yes | Yes |
+
+## TypeScript
+
+```bash
+bun add rd-mini @google/genai
+```
+
+```typescript
+import { Raindrop } from 'rd-mini';
+import { GoogleGenAI } from '@google/genai';
+
+const raindrop = new Raindrop({ apiKey: process.env.RAINDROP_API_KEY });
+const ai = raindrop.wrap(new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }));
+
+// Non-streaming
+const response = await ai.models.generateContent({
+  model: 'gemini-2.0-flash',
+  contents: 'Hello!',
+});
+
+console.log(response.text);
+console.log(response._traceId); // Access trace ID
+```
+
+### Streaming
+
+```typescript
+const stream = await ai.models.generateContentStream({
+  model: 'gemini-2.0-flash',
+  contents: 'Write a poem about coding',
+});
+
+console.log(stream._traceId); // Available immediately
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.text || '');
+}
+// Trace is automatically completed when stream ends
+```
+
+### Function Calling
+
+```typescript
+const response = await ai.models.generateContent({
+  model: 'gemini-2.0-flash',
+  contents: 'What is the weather in Tokyo?',
+  tools: [{
+    functionDeclarations: [{
+      name: 'get_weather',
+      description: 'Get the current weather',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' }
+        },
+        required: ['location']
+      }
+    }]
+  }]
+});
+
+// Function calls are automatically captured in the trace
+```
+
+### With Thinking (Gemini 2.0+)
+
+```typescript
+const response = await ai.models.generateContent({
+  model: 'gemini-2.0-flash-thinking-exp',
+  contents: 'Solve this math problem step by step: 15 * 23',
+  config: {
+    thinkingConfig: {
+      thinkingLevel: 'high',
+    }
+  }
+});
+
+// Thinking tokens are captured separately in the trace
+```
+
+### Per-Request Options
+
+```typescript
+const response = await ai.models.generateContent(
+  {
+    model: 'gemini-2.0-flash',
+    contents: 'Hello!',
+  },
+  {
+    raindrop: {
+      userId: 'user_123',
+      conversationId: 'conv_456',
+      properties: { experiment: 'v2' },
+    },
+  }
+);
+```
+
+## Python
+
+```bash
+uv add rd-mini google-genai
+```
+
+```python
+import os
+from rd_mini import Raindrop
+from google import genai
+
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+ai = raindrop.wrap(genai.Client(api_key=os.environ["GOOGLE_API_KEY"]))
+
+# Non-streaming
+response = ai.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Hello!",
+)
+
+print(response.text)
+print(response._trace_id)  # Access trace ID
+```
+
+### Streaming
+
+```python
+stream = ai.models.generate_content_stream(
+    model="gemini-2.0-flash",
+    contents="Write a poem about coding",
+)
+
+for chunk in stream:
+    print(chunk.text or "", end="")
+# Trace is automatically completed when stream ends
+```
+
+### Per-Request Options
+
+```python
+response = ai.models.generate_content(
+    model="gemini-2.0-flash",
+    contents="Hello!",
+    raindrop={
+        "user_id": "user_123",
+        "conversation_id": "conv_456",
+        "properties": {"experiment": "v2"},
+    },
+)
+```
+
+## What's Captured
+
+Every Gemini call automatically captures:
+
+- **Model** - Which model was used (e.g., `gemini-2.0-flash`)
+- **Input** - Contents sent to the model
+- **Output** - Model's response (including streamed content)
+- **Tokens** - Input, output, and total token counts
+- **Thinking Tokens** - Separate count for reasoning tokens (Gemini 2.0+)
+- **Latency** - Time from request to response
+- **Function Calls** - Function names and arguments
+- **Errors** - Any errors that occurred
+
+## Gemini 3 Support
+
+The wrapper fully supports Gemini 3 models including:
+
+- `gemini-3-pro-preview`
+- `gemini-3-flash-preview`
+- `gemini-3-pro-image-preview` (Nano Banana Pro)
+
+All new features like thinking levels, media resolution, and thought signatures are captured in traces.

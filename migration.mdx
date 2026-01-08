@@ -1,0 +1,295 @@
+---
+title: Migrating from raindrop-ai
+description: Feature comparison and migration guide
+---
+
+# Migrating from raindrop-ai
+
+rd-mini is the next generation of the Raindrop SDK. It's a ground-up rewrite focused on simplicity, reliability, and explicit behavior.
+
+<Note>
+This page is for users migrating from the legacy `raindrop-ai` package. New users should start with the [Quickstart](/quickstart).
+</Note>
+
+## Why rd-mini?
+
+| Issue with raindrop-ai | How rd-mini solves it |
+|------------------------|----------------------|
+| `initTracing()` must be called before imports | No initialization step needed |
+| `instrumentModules` breaks with bundlers | Explicit `wrap()` works everywhere |
+| Anthropic requires `import * as` namespace | Normal imports work |
+| Next.js requires `serverExternalPackages` | No special config needed |
+| Hard to debug ("why isn't this traced?") | Clear: if it's wrapped, it's traced |
+| Large bundle with Traceloop dependency | Zero dependencies beyond `fetch` |
+
+## Feature Comparison
+
+### What Stayed the Same
+
+| Feature | raindrop-ai | rd-mini |
+|---------|-------------|---------|
+| `begin()` / `finish()` | ✅ | ✅ Same API |
+| `resumeInteraction()` | ✅ | ✅ Same API |
+| `trackSignal()` | ✅ | ✅ Same API |
+| `addAttachments()` | ✅ | ✅ Same API |
+| `setProperty()` / `setProperties()` | ✅ | ✅ Same API |
+| Streaming support | ✅ | ✅ Same behavior |
+| Tool calls captured | ✅ | ✅ Same behavior |
+
+### What Changed
+
+| Feature | raindrop-ai | rd-mini | Migration |
+|---------|-------------|---------|-----------|
+| **API Key** | `writeKey` | `apiKey` | `writeKey` still works |
+| **User ID** | `setUserDetails()` | `identify()` | Rename method |
+| **Debug logs** | `debugLogs: true` | `debug: true` | Rename option |
+| **Auto-instrumentation** | `instrumentModules` | `wrap()` | See below |
+| **PII redaction** | `redactPii: true` | Plugin | See plugins |
+| **OTEL export** | Built-in | Plugin | See plugins |
+
+### What's New
+
+| Feature | Description |
+|---------|-------------|
+| **Plugin system** | Extensible architecture for PII, OTEL, custom |
+| **Browser SDK** | First-class client-side support with persistence |
+| **`withInteraction()`** | Context manager pattern (cleaner than begin/finish) |
+| **`wrapTool()`** | Wrap functions for automatic tracing |
+| **Vercel AI SDK** | Direct support via `wrap()` |
+
+### What Was Removed
+
+| Feature | Reason | Alternative |
+|---------|--------|-------------|
+| `initTracing()` | No longer needed | Just import and use |
+| `instrumentModules` | Caused bundler issues | Use `wrap()` |
+| `tracer()` | Rarely used | Use `begin()` with batch ID |
+| `withSpan()` | Confusing distinction | Use `withTool()` |
+| `createSpanProcessor()` | Complex OTEL setup | Use OTEL plugin |
+
+---
+
+## Migration Steps
+
+### TypeScript
+
+**1. Update imports**
+
+```typescript
+// Before
+import { initTracing } from "raindrop-ai/tracing";
+initTracing();
+import { Raindrop } from "raindrop-ai";
+
+// After
+import { Raindrop } from "rd-mini";
+```
+
+**2. Update initialization**
+
+```typescript
+// Before
+const raindrop = new Raindrop({
+  writeKey: process.env.RAINDROP_API_KEY,
+  debugLogs: true,
+  redactPii: true,
+  instrumentModules: {
+    openAI: OpenAI,
+    anthropic: AnthropicModule,
+  },
+});
+const openai = new OpenAI();
+
+// After
+import { createPiiPlugin } from 'rd-mini/plugins/pii';
+
+const raindrop = new Raindrop({
+  apiKey: process.env.RAINDROP_API_KEY,
+  debug: true,
+  plugins: [createPiiPlugin()],
+});
+const openai = raindrop.wrap(new OpenAI());
+```
+
+**3. Update user identification**
+
+```typescript
+// Before
+raindrop.setUserDetails({ userId: "user_123", traits: { name: "Jane" } });
+
+// After
+raindrop.identify("user_123", { name: "Jane" });
+```
+
+**4. Update trackAi (if used)**
+
+```typescript
+// Before
+raindrop.trackAi({ event: "chat", userId: "u1", model: "gpt-4o", input: "Hi", output: "Hello!" });
+
+// After - Option 1: begin/finish
+const interaction = raindrop.begin({ event: "chat", userId: "u1", model: "gpt-4o", input: "Hi" });
+interaction.finish({ output: "Hello!" });
+
+// After - Option 2: withInteraction
+await raindrop.withInteraction(
+  { event: "chat", userId: "u1", model: "gpt-4o", input: "Hi" },
+  async () => "Hello!"
+);
+```
+
+### Python
+
+**1. Update imports**
+
+```python
+# Before
+import raindrop
+raindrop.init(api_key=os.environ["RAINDROP_API_KEY"])
+
+# After
+from rd_mini import Raindrop
+raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])
+```
+
+**2. Wrap your clients**
+
+```python
+# Before - auto-instrumented via Traceloop
+client = OpenAI()
+
+# After - explicit wrap
+client = raindrop.wrap(OpenAI())
+```
+
+**3. Update decorators**
+
+```python
+# Before
+@raindrop.task(name="embed")
+def embed_text(text): ...
+
+# After
+@raindrop.task("embed")
+def embed_text(text): ...
+```
+
+**4. Update context managers**
+
+```python
+# Before
+with raindrop.task_span("process"):
+    result = process(data)
+
+# After
+with raindrop.start_span("process", kind="task") as span:
+    result = process(data)
+    span.set_output(result)
+```
+
+**5. Update shutdown**
+
+```python
+# Before
+raindrop.shutdown()
+
+# After
+raindrop.close()
+```
+
+---
+
+## Config Option Mapping
+
+| raindrop-ai | rd-mini | Notes |
+|-------------|---------|-------|
+| `writeKey` | `apiKey` | Both work |
+| `endpoint` | `baseUrl` | |
+| `debugLogs` | `debug` | |
+| `disabled` | `disabled` | Same |
+| `redactPii` | `plugins: [createPiiPlugin()]` | Or `redactPii: true` shorthand |
+| `disableTracing` | `disabled` | |
+| `bufferSize` | `maxQueueSize` | |
+| `bufferTimeout` | `flushInterval` | Now in ms (TS) or seconds (Python) |
+| `instrumentModules` | `wrap()` | Explicit per-client |
+
+---
+
+## Common Migration Issues
+
+### "My calls aren't being traced"
+
+You need to wrap your client:
+
+```typescript
+// Wrong
+const openai = new OpenAI();
+
+// Correct
+const openai = raindrop.wrap(new OpenAI());
+```
+
+### "I was using instrumentModules"
+
+Replace with explicit wrapping:
+
+```typescript
+// Before
+new Raindrop({
+  instrumentModules: { openAI: OpenAI, anthropic: AnthropicModule }
+});
+const openai = new OpenAI();
+
+// After
+const raindrop = new Raindrop({ apiKey: '...' });
+const openai = raindrop.wrap(new OpenAI());
+```
+
+### "I was using trackAi() for simple events"
+
+Use `begin()`/`finish()` or let `wrap()` handle it:
+
+```typescript
+// If you have input/output at the same time, use begin/finish
+const interaction = raindrop.begin({ event: "log", input: "Hi" });
+interaction.finish({ output: "Hello" });
+
+// If you're making actual LLM calls, just use wrap()
+const openai = raindrop.wrap(new OpenAI());
+const response = await openai.chat.completions.create({ ... });
+// Automatically traced!
+```
+
+### "I need PII redaction"
+
+It's now a plugin:
+
+```typescript
+import { createPiiPlugin } from 'rd-mini/plugins/pii';
+
+const raindrop = new Raindrop({
+  apiKey: '...',
+  plugins: [createPiiPlugin()],
+});
+```
+
+### "I was using OTEL/Traceloop"
+
+Use the OTEL plugin:
+
+```typescript
+import { createOtelPlugin } from 'rd-mini/plugins/otel';
+
+const raindrop = new Raindrop({
+  apiKey: '...',
+  plugins: [createOtelPlugin({ serviceName: 'my-service' })],
+});
+```
+
+---
+
+## Need Help?
+
+- Check [Troubleshooting](/troubleshooting) for common issues
+- Open an issue on [GitHub](https://github.com/ryandonofrio/rd-mini)
+- Contact support on Slack
