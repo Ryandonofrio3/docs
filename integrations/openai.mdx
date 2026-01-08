@@ -103,7 +103,8 @@ uv add rd-mini openai
 ```
 
 ```python
-from raindrop import Raindrop
+import os
+from rd_mini import Raindrop
 from openai import OpenAI
 
 raindrop = Raindrop(api_key=os.environ["RAINDROP_API_KEY"])

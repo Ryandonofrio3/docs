@@ -63,6 +63,8 @@ rd-mini supports wrapping these AI clients:
 |----------|--------|------|
 | OpenAI | `import OpenAI from 'openai'` | `raindrop.wrap(new OpenAI())` |
 | Anthropic | `import Anthropic from '@anthropic-ai/sdk'` | `raindrop.wrap(new Anthropic())` |
+| Google Gemini | `import { GoogleGenAI } from '@google/genai'` | `raindrop.wrap(new GoogleGenAI())` |
+| AWS Bedrock | `import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'` | `raindrop.wrap(new BedrockRuntimeClient())` |
 | Vercel AI SDK | `import { openai } from '@ai-sdk/openai'` | `raindrop.wrap(openai('gpt-4o'))` |
 
 ## Next Steps
