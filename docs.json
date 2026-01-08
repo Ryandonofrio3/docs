@@ -54,7 +54,16 @@
             "pages": [
               "integrations/openai",
               "integrations/anthropic",
+              "integrations/gemini",
+              "integrations/bedrock",
               "integrations/vercel-ai-sdk"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/http-api",
+              "guides/deployment"
             ]
           },
           {
