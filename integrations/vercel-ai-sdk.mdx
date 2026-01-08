@@ -373,6 +373,158 @@ experimental_telemetry: raindropTelemetry({
 }),
 ```
 
+### Streaming Support
+
+The exporter captures streaming responses automatically:
+
+```typescript
+import { streamText } from 'ai';
+
+const result = await streamText({
+  model: openai('gpt-4o'),
+  prompt: 'Write a story...',
+  experimental_telemetry: { isEnabled: true },
+});
+
+for await (const chunk of result.textStream) {
+  process.stdout.write(chunk);
+}
+// Full trace with accumulated output is sent when stream completes
+```
+
+### With Tool Calls
+
+Tool calls are automatically captured in traces:
+
+```typescript
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
+
+const result = await generateText({
+  model: openai('gpt-4o'),
+  experimental_telemetry: { isEnabled: true },
+  tools: {
+    weather: tool({
+      description: 'Get weather',
+      parameters: z.object({ location: z.string() }),
+      execute: async ({ location }) => ({ temp: 72 }),
+    }),
+  },
+  prompt: 'What is the weather in Tokyo?',
+});
+// Tool calls captured with names, arguments, and results
+```
+
+---
+
+## How the OTEL Exporter Works
+
+The `RaindropExporter` implements the OpenTelemetry `SpanExporter` interface to receive telemetry spans from the Vercel AI SDK:
+
+```
+AI SDK Call → OTEL Span → RaindropExporter → Raindrop API
+```
+
+### Span Processing
+
+1. **Filtering**: Only AI SDK spans are processed (spans with `ai.` prefix or AI-specific attributes)
+2. **Transformation**: OTEL spans are converted to Raindrop event format
+3. **Batching**: Events are sent in configurable batches
+4. **Retry**: Failed requests are retried with exponential backoff
+
+### Extracted Data
+
+From each span, the exporter extracts:
+
+| OTEL Attribute | Raindrop Field |
+|----------------|----------------|
+| `ai.model.id` | `model` |
+| `ai.model.provider` | `provider` |
+| `ai.prompt` | `input` |
+| `ai.response.text` | `output` |
+| `ai.usage.promptTokens` | `tokens.input` |
+| `ai.usage.completionTokens` | `tokens.output` |
+| `ai.telemetry.functionId` | `event` |
+| `ai.telemetry.metadata.userId` | `user_id` |
+| `ai.telemetry.metadata.conversationId` | `convo_id` |
+
+---
+
+## API Reference
+
+### RaindropExporter
+
+```typescript
+import { RaindropExporter } from 'rd-mini/vercel';
+
+interface RaindropExporterConfig {
+  /** Your Raindrop API key (required) */
+  apiKey: string;
+
+  /** Base URL for Raindrop API (default: 'https://api.raindrop.ai') */
+  baseUrl?: string;
+
+  /** Enable debug logging (default: false) */
+  debug?: boolean;
+
+  /** Include prompt/response content (default: true) */
+  includeContent?: boolean;
+
+  /** Events per batch (default: 100) */
+  batchSize?: number;
+
+  /** Request timeout in ms (default: 30000) */
+  timeout?: number;
+
+  /** Custom span filter function */
+  spanFilter?: (span: ReadableSpan) => boolean;
+}
+```
+
+### raindropTelemetry
+
+Helper function to create `experimental_telemetry` config:
+
+```typescript
+import { raindropTelemetry } from 'rd-mini/vercel';
+
+interface RaindropTelemetryOptions {
+  /** Function/event name for this call */
+  functionId?: string;
+
+  /** User ID to associate with this trace */
+  userId?: string;
+
+  /** Conversation/thread ID to group related traces */
+  conversationId?: string;
+
+  /** Alias for functionId */
+  event?: string;
+
+  /** Additional custom properties */
+  properties?: Record<string, string | number | boolean>;
+
+  /** Whether to record input/output content (default: true) */
+  recordContent?: boolean;
+}
+
+// Returns TelemetryConfig compatible with experimental_telemetry
+```
+
+### isAISDKSpan
+
+Utility to identify AI SDK spans:
+
+```typescript
+import { isAISDKSpan } from 'rd-mini/vercel';
+
+// Use in custom span filters
+new RaindropExporter({
+  apiKey: '...',
+  spanFilter: (span) => isAISDKSpan(span) && span.name !== 'ai.embed',
+});
+```
+
 ---
 
 ## Which Approach Should I Use?
@@ -388,3 +540,26 @@ Both approaches capture the same data. Choose based on your setup:
 - Simple Node.js app? → Model Wrapping
 - Using many AI SDK providers? → Telemetry Exporter (one setup for all)
 - Want minimal dependencies? → Model Wrapping
+
+---
+
+## Combining with Other OTEL Tools
+
+The `RaindropExporter` can be used alongside other OTEL exporters:
+
+```typescript
+import { registerOTel } from '@vercel/otel';
+import { RaindropExporter } from 'rd-mini/vercel';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+
+// Send to both Raindrop and another OTEL backend
+export function register() {
+  registerOTel({
+    serviceName: 'my-app',
+    traceExporter: new RaindropExporter({
+      apiKey: process.env.RAINDROP_API_KEY!,
+    }),
+    // Additional exporters can be configured via OTEL SDK
+  });
+}
+```
