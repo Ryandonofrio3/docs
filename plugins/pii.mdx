@@ -89,8 +89,11 @@ The plugin redacts the following by default:
       // Replacement text (default: <REDACTED>)
       replacement: '[REMOVED]',
 
-      // Redact names in greetings like "Hi John" (default: false)
+      // Redact names using well-known names list and greeting/closing context (default: false)
       redactNames: true,
+
+      // Use specific tokens like <REDACTED_EMAIL> instead of generic <REDACTED> (default: false)
+      specificTokens: true,
     });
     ```
   </Tab>
@@ -111,8 +114,11 @@ The plugin redacts the following by default:
         # Replacement text (default: <REDACTED>)
         replacement="[REMOVED]",
 
-        # Redact names in greetings like "Hi John" (default: False)
+        # Redact names using well-known names list and greeting/closing context (default: False)
         redact_names=True,
+
+        # Use specific tokens like <REDACTED_EMAIL> instead of generic <REDACTED> (default: False)
+        specific_tokens=True,
     )
     ```
   </Tab>
@@ -126,6 +132,9 @@ The plugin applies redaction to:
 - **Span input/output** - Tool inputs and outputs
 - **Interaction input/output** - Multi-step workflow data
 - **Tool call arguments** - Function parameters
+- **Error messages** - Stack traces and error strings that may contain sensitive data
+- **Custom properties** - Any properties object attached to traces, spans, or interactions
+- **Attachments** - Attachment content and filenames
 
 ## Example
 
@@ -135,10 +144,45 @@ Hi, my email is john@example.com and my phone is (555) 123-4567.
 My SSN is 123-45-6789.
 ```
 
-**After redaction:**
+**After redaction (default):**
 ```
 Hi, my email is <REDACTED> and my phone is <REDACTED>.
 My SSN is <REDACTED>.
+```
+
+**After redaction (with `specificTokens: true`):**
+```
+Hi, my email is <REDACTED_EMAIL> and my phone is <REDACTED_PHONE>.
+My SSN is <REDACTED_SSN>.
+```
+
+## Name Redaction
+
+When `redactNames` is enabled, the plugin uses multiple strategies to detect and redact names:
+
+1. **Well-known names** - A built-in list of ~11,000 common first and last names
+2. **Greeting context** - Names after greetings like "Hi John" or "Dear Sarah"
+3. **Closing context** - Names before closings like "Thanks, John" or "Best regards, Sarah"
+4. **Signature lines** - Short lines that appear to be signatures
+
+**Example with name redaction:**
+```
+Hi John,
+
+Thanks for reaching out about the project.
+
+Best,
+Sarah Smith
+```
+
+**After redaction (with `redactNames: true`):**
+```
+Hi <REDACTED_NAME>,
+
+Thanks for reaching out about the project.
+
+Best,
+<REDACTED_NAME>
 ```
 
 ## Plugin Order
